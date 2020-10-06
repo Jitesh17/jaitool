@@ -1,18 +1,27 @@
+# from __future__ import annotations
+import timeit
+from datetime import datetime
+from functools import partial
+from sys import exit as x
 from typing import List, Union
 
 import cv2
 import numpy as np
 import printj  # pip install printj
+from tqdm import tqdm
+
+import jaitool.inference.d2_infer
+import pyjeasy.file_utils as f
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
-from pyjeasy.check_utils import check_value
-from pyjeasy.image_utils.output import show_image
-import pyjeasy.file_utils as f
-from pyjeasy.file_utils import (dir_exists, file_exists, delete_dir,
-                                make_dir, dir_files_list)
-from tqdm import tqdm
+from jaitool.draw import draw_bbox, draw_keypoints, draw_mask_bool
 from jaitool.structures.bbox import BBox
-from jaitool.draw import draw_mask_bool, draw_bbox, draw_keypoints
+from pyjeasy.check_utils import check_value
+from pyjeasy.file_utils import (delete_dir, delete_dir_if_exists, dir_exists,
+                                dir_files_list, file_exists, make_dir,
+                                make_dir_if_not_exists)
+from pyjeasy.image_utils.output import show_image
+from seaborn import color_palette
 
 
 class D2Inferer:
@@ -28,7 +37,22 @@ class D2Inferer:
             key_seg_together: bool = False,
             detectron2_dir_path: str = "/home/jitesh/detectron/detectron2"
     ):
+        """
+        D2Inferer
+        =========
 
+        Parameters:
+        ------
+        weights_path: str 
+        class_names: List[str] = None, num_classes: int = None,
+        keypoint_names: List[str] = None, num_keypoints: int = None,
+        model: str = "mask_rcnn_R_50_FPN_1x",
+        confidence_threshold: float = 0.5,
+        size_min: int = None,
+        size_max: int = None,
+        key_seg_together: bool = False,
+        detectron2_dir_path: str = "/home/jitesh/detectron/detectron2"
+        """
         if class_names is None:
             class_names = ['']
         if keypoint_names is None:
@@ -96,9 +120,35 @@ class D2Inferer:
         self.predictor = DefaultPredictor(self.cfg)
 
     def get_outputs(self, img: np.ndarray) -> dict:
+        ''''''
         return self.predictor(img)
 
     def predict(self, img: np.ndarray) -> dict:
+        """
+        predict_dict = self.predict(img=img)
+        
+        score_list = predict_dict['score_list']
+        
+        bbox_list = predict_dict['bbox_list']
+        
+        pred_class_list = predict_dict['pred_class_list']
+        
+        pred_masks_list = predict_dict['pred_masks_list']
+        
+        pred_keypoints_list = predict_dict['pred_keypoints_list']
+        
+        vis_keypoints_list = predict_dict['vis_keypoints_list']
+        
+        kpt_confidences_list = predict_dict['kpt_confidences_list']
+        
+        for score, pred_class, bbox, mask, keypoints, vis_keypoints, kpt_confidences in zip(score_list,
+                                                                                            pred_class_list,
+                                                                                            bbox_list,
+                                                                                            pred_masks_list,
+                                                                                            pred_keypoints_list,
+                                                                                            vis_keypoints_list,
+                                                                                            kpt_confidences_list):
+        """
         outputs = self.get_outputs(img)
         result = dict()
         score_list = [float(val)
@@ -135,6 +185,7 @@ class D2Inferer:
 
     @staticmethod
     def confirm_folder(path, mode):
+        '''Deletes the directory if exist and create new directory.'''
         # make_dir_if_not_exists(path)
         if mode == 'save':
             if dir_exists(path):
@@ -144,6 +195,7 @@ class D2Inferer:
                 make_dir(path)
 
     def infer_image(self, image_path: str,
+                    show_max_score_only: bool = False,
                     show_class_label: bool = True,
                     show_keypoint_label: bool = True,
                     show_bbox: bool = True,
@@ -151,7 +203,10 @@ class D2Inferer:
                     show_segmentation: bool = True,
                     transparent_mask: bool = True,
                     transparency_alpha: float = 0.3,
-                    ignore_keypoint_idx: list = []) -> np.ndarray:
+                    ignore_keypoint_idx=None,) -> np.ndarray:
+        '''Returns the Inference result of a single image.'''
+        if ignore_keypoint_idx is None:
+            ignore_keypoint_idx = []
         img = cv2.imread(image_path)
         output = img.copy()
         predict_dict = self.predict(img=img)
@@ -162,6 +217,15 @@ class D2Inferer:
         pred_keypoints_list = predict_dict['pred_keypoints_list']
         vis_keypoints_list = predict_dict['vis_keypoints_list']
         kpt_confidences_list = predict_dict['kpt_confidences_list']
+        
+        
+        palette = np.array(color_palette(None, self.num_classes+1))*255
+        
+        if show_max_score_only:
+            max_score_list = dict()
+            for i, class_name in enumerate(self.class_names):
+                max_score_list[class_name] = -1
+            max_score_pred_list = dict()
         for score, pred_class, bbox, mask, keypoints, vis_keypoints, kpt_confidences in zip(score_list,
                                                                                             pred_class_list,
                                                                                             bbox_list,
@@ -169,33 +233,76 @@ class D2Inferer:
                                                                                             pred_keypoints_list,
                                                                                             vis_keypoints_list,
                                                                                             kpt_confidences_list):
-            if mask is not None and show_segmentation:
-                output = draw_mask_bool(img=output, mask_bool=mask, transparent=transparent_mask,
-                                        alpha=transparency_alpha)
-            output = draw_bbox(img=output, bbox=bbox,
-                               show_bbox=show_bbox, show_label=show_class_label)
-            if keypoints is not None and show_keypoints:
-                output = draw_keypoints(img=output, keypoints=keypoints, show_keypoints=show_keypoints,
-                                        keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
-                                        ignore_kpt_idx=ignore_keypoint_idx)
-
+            if show_max_score_only:
+                for i, class_name in enumerate(self.class_names):
+                    if class_name == pred_class:
+                        if max_score_list[class_name] < score:
+                            max_score_list[class_name] = score
+                            max_score_pred_list[class_name] = {
+                                "score": score,
+                                "pred_class": pred_class,
+                                "bbox": bbox,
+                                "mask": mask,
+                                "keypoints": keypoints,
+                                "vis_keypoints": vis_keypoints,
+                                "kpt_confidences": kpt_confidences,
+                                }
+            else:
+                if mask is not None and show_segmentation:
+                    output = draw_mask_bool(img=output, mask_bool=mask, transparent=transparent_mask,
+                                            alpha=transparency_alpha)
+                output = draw_bbox(img=output, bbox=bbox,
+                                show_bbox=show_bbox, show_label=show_class_label, text=f'{pred_class} {round(score, 2)}')
+                if keypoints is not None and show_keypoints:
+                    output = draw_keypoints(img=output, keypoints=keypoints, show_keypoints=show_keypoints,
+                                            keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
+                                            ignore_kpt_idx=ignore_keypoint_idx)
+        
+        if show_max_score_only:
+            for i, class_name in enumerate(self.class_names):
+                if max_score_list[class_name] > 0:
+                    max_pred = max_score_pred_list[class_name]
+                    if max_pred["mask"] is not None and show_segmentation:
+                        output = draw_mask_bool(img=output, mask_bool=max_pred["mask"], color=palette[i+1], transparent=transparent_mask,
+                                                alpha=transparency_alpha)
+                    output = draw_bbox(img=output, bbox=max_pred["bbox"],
+                                    show_bbox=show_bbox, show_label=show_class_label, text=f'{max_pred["pred_class"]} {round(max_pred["score"], 2)}')
+                    if keypoints is not None and show_keypoints:
+                        output = draw_keypoints(img=output, keypoints=max_pred["keypoints"], show_keypoints=show_keypoints,
+                                                keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
+                                                ignore_kpt_idx=ignore_keypoint_idx)
         return output
 
     def infer(self, input_type: Union[str, int], 
               output_type: Union[str, int],
               input_path: Union[str, List[str]], 
               output_path: Union[str, List[str]],
+              show_max_score_only: bool = False,
               show_class_label: bool = True,
               show_keypoint_label: bool = True,
               show_bbox: bool = True,
               show_keypoints: bool = True,
               show_segmentation: bool = True,
               transparent_mask: bool = True,
+                    transparency_alpha: float = 0.3,
+                    ignore_keypoint_idx=None,
               gt_path: Union[str, List[str]] = '/home/jitesh/3d/data/coco_data/hook_test/json/cropped_hook.json'):
         """
-        Valid options for, input_type: ["image", "image_list", "image_directory", "image_directories_list", "video",
+        
+        Valid options for,
+        === 
+        input_type:
+        --- 
+        ["image", "image_list", "image_directory", "image_directories_list", "video",
         "video_list", "video_directory" ]
-        output_type: ["show_image", "write_image", "write_video" ]
+        
+        output_type: 
+        ---
+        ["show_image", "write_image", "write_video" ]
+        
+        Returns
+        ---
+        The inference result of all data formats.
         """
 
         check_value(input_type,
@@ -204,8 +311,15 @@ class D2Inferer:
         check_value(value=output_type, check_from=[
                     "show_image", "write_image", "write_video"])
 
+        predict_image = partial(self.infer_image,
+                                show_max_score_only=show_max_score_only, 
+                                show_class_label=show_class_label,
+                                show_keypoint_label=show_keypoint_label, 
+                                show_bbox=show_bbox, show_keypoints=show_keypoints, show_segmentation=show_segmentation,
+                                transparent_mask=transparent_mask, transparency_alpha=transparency_alpha,
+                                ignore_keypoint_idx=ignore_keypoint_idx)
         if input_type == "image":
-            output = self.infer_image(input_path)
+            output = predict_image(input_path)
             if output_type == "show_image":
                 show_image(output)
             elif output_type == "write_image":
@@ -215,10 +329,11 @@ class D2Inferer:
             else:
                 raise Exception
         elif input_type == "image_list":
-            for image_path in input_path:
-                output = self.infer_image(image_path)
+            for image_path in tqdm(input_path):
+                output = predict_image(image_path)
                 if output_type == "show_image":
-                    show_image(output)
+                    if show_image(output):
+                        break
                 elif output_type == "write_image":
                     filename = f.get_filename(image_path)
                     cv2.imwrite(f'{output_path}/{filename}', output)
@@ -227,11 +342,12 @@ class D2Inferer:
                 else:
                     raise Exception
         elif input_type == "image_directory":
-            image_path_list = f.dir_files_list(dir_path=input_path)
-            for image_path in image_path_list:
-                output = self.infer_image(image_path)
+            image_path_list = f.dir_files_path_list(dir_path=input_path)
+            for image_path in tqdm(image_path_list):
+                output = predict_image(image_path)
                 if output_type == "show_image":
-                    show_image(output)
+                    if show_image(output):
+                        break
                 elif output_type == "write_image":
                     filename = f.get_filename(image_path)
                     cv2.imwrite(f'{output_path}/{filename}', output)
@@ -240,12 +356,13 @@ class D2Inferer:
                 else:
                     raise Exception
         elif input_type == "image_directories_list":
-            for image_directory in input_path:
-                image_path_list = f.dir_files_list(dir_path=image_directory)
-                for image_path in image_path_list:
-                    output = self.infer_image(image_path)
+            for image_directory in tqdm(input_path):
+                image_path_list = f.dir_files_path_list(dir_path=image_directory)
+                for image_path in tqdm(image_path_list):
+                    output = predict_image(image_path)
                     if output_type == "show_image":
-                        show_image(output)
+                        if show_image(output):
+                            break
                     elif output_type == "write_image":
                         filename = f.get_filename(image_path)
                         directory_name = f.get_directory_name(image_path)
@@ -268,3 +385,38 @@ class D2Inferer:
             raise NotImplementedError
         else:
             raise Exception
+
+if __name__ == "__main__":
+    
+    
+    # palette = color_palette(None, 3)
+    # # palette = [int(c*255) for color in palette for c in color]
+    # # palette = [int(c*255) for color in palette for c in color]
+    # printj.red(np.array(color_palette(None, 3))*255)
+    # printj.red(palette)
+    # x()
+    inferer_seg = D2Inferer(
+        weights_path='/home/jitesh/3d/data/coco_data/ty1w_coco-data/weights/InstanceSegmentation_R_50_1x_aug_val_1/model_0019999.pth',
+        confidence_threshold=0.01,
+        class_names=['tropicana'],
+        model='mask_rcnn_R_50_FPN_1x',
+        size_min=1000, size_max=1000,
+    )
+    now = datetime.now()
+    dt_string3 = now.strftime("%m_%d_%H")
+    # infer_dump_dir = f'/home/jitesh/3d/blender/Learning/tropicana/infer_5k_{dt_string3}'
+    infer_dump_dir = f'/home/jitesh/3d/blender/Learning/tropicana_yellow/infer_5k_{dt_string3}'
+    delete_dir_if_exists(infer_dump_dir)
+    make_dir_if_not_exists(infer_dump_dir)
+    
+    dir_path = "/home/jitesh/Downloads/Photos (3)"
+    # dir_path = "/home/jitesh/3d/blender/Learning/tropicana_yellow/img"
+    # dir_path = "/home/jitesh/3d/data/coco_data/tropi1_coco-data/img"
+    inferer_seg.infer(input_type="image_directory", 
+              output_type="show_image",
+              input_path=dir_path, 
+              output_path=infer_dump_dir,
+              show_class_label=True,
+              show_max_score_only= True,
+              transparency_alpha=.9,
+              )

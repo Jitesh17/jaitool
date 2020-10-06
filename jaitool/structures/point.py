@@ -1,6 +1,8 @@
 # from __future__ import annotations
 from typing import List
 import numpy as np
+
+
 # from shapely.geometry import Point as ShapelyPoint
 
 # from logger import logger
@@ -14,11 +16,12 @@ import numpy as np
 # TODO: Create a base class for Point2D, Point3D, Point2D_List, Point3D_List
 
 class Point:
-    def __init__(self, coords: list):
-        check_type(item=coords, valid_type_list=[list])
-        check_type_from_list(item_list=coords, valid_type_list=number_types)
-        self.coords = coords
-        self.dimensionality = len(coords)
+    def __init__(self, coordinates: list):
+        # check_type(item=coordinates, valid_type_list=[list])
+        # check_type_from_list(item_list=coordinates, valid_type_list=number_types)
+        self.coordinates = coordinates
+        self.dimensionality = len(coordinates)
+
 
 #     def __str__(self):
 #         return f"{get_class_string(self)}: {self.coords}"

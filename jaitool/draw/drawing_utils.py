@@ -22,7 +22,7 @@ def draw_bbox(
     if color is None:
         color = [0, 255, 255]
     result = img.copy()
-    print(type(bbox))
+    # print(type(bbox))
     if type(bbox) == BBox:
         xmin, ymin, xmax, ymax = bbox.to_int().to_list()
     elif type(bbox) == tuple:
@@ -124,10 +124,14 @@ def draw_mask_bool(
 
 
 def draw_keypoints_labels(
-        img: np.ndarray, keypoints: list, keypoint_labels: list, color: list = [0, 0, 255],
+        img: np.ndarray, keypoints: list, keypoint_labels: list, color=None,
         font_face: int = cv2.FONT_HERSHEY_COMPLEX, thickness: int = 1,
-        ignore_kpt_idx: list = []
+        ignore_kpt_idx=None
 ):
+    if ignore_kpt_idx is None:
+        ignore_kpt_idx = []
+    if color is None:
+        color = [0, 0, 255]
     result = img.copy()
 
     # Define BBox enclosing keypoints
@@ -182,11 +186,15 @@ def draw_keypoints_labels(
 
 def draw_keypoints(
         img: np.ndarray, keypoints: list, point_info_length: int = 2, show_keypoints: bool = True,
-        radius: int = 4, color: list = [0, 0, 255],
+        radius: int = 4, color=None,
         keypoint_labels: list = None, show_keypoints_labels: bool = False, label_thickness: int = 1,
         label_color: list = None,
-        ignore_kpt_idx: list = []
+        ignore_kpt_idx=None
 ) -> np.ndarray:
+    if ignore_kpt_idx is None:
+        ignore_kpt_idx = []
+    if color is None:
+        color = [0, 0, 255]
     result = img.copy()
     _keypoints = []
     if point_info_length > 2:
@@ -227,8 +235,7 @@ if __name__ == "__main__":
     blank_image = draw_bbox(
         blank_image, BBox(10, 200, 100, 400),
         color=[0, 255, 255], thickness=2, text='hi', label_thickness=2,
-        label_color=[0, 100, 255], label_only=False,
-        # label_orientation='top'
+        label_color=[0, 100, 255],  # label_orientation='top'
         label_orientation='right'
     )
     # im = cv.imread('test.jpg')

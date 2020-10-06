@@ -9,7 +9,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name= "jaitool",
+    name="jaitool",
     version="0.0.3",
     author="Jitesh Gosar",
     author_email="gosar95@gmail.com",
@@ -38,7 +38,7 @@ setup(
         "numpy",
         "pandas",
         "shapely",
-        "git+https://github.com/facebookresearch/detectron2.git",
+        # "git+https://github.com/facebookresearch/detectron2.git",
         "hypothesis",
         "pytest"
     ],

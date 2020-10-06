@@ -1,14 +1,17 @@
 from __future__ import annotations
-from typing import List
+
+# from typing import List
 import numpy as np
-import cv2
-from shapely.geometry import Point as ShapelyPoint
-from shapely.geometry.polygon import Polygon as ShapelyPolygon
-from shapely.ops import cascaded_union, unary_union, polygonize
-from shapely.geometry import LineString
+
+
+# import cv2
+# from shapely.geometry import Point as ShapelyPoint
+# from shapely.geometry.polygon import Polygon as ShapelyPolygon
+# from shapely.ops import cascaded_union, unary_union, polygonize
+# from shapely.geometry import LineString
 # from imgaug.augmentables.polys import Polygon as ImgAugPolygon, PolygonsOnImage as ImgAugPolygons
 # import imgaug
-import shapely
+
 
 # from logger import logger
 #
@@ -28,7 +31,8 @@ class Polygon:
         # check_type(item=dimensionality, valid_type_list=[int])
 
         if isinstance(points, np.ndarray):
-            self.points = points.tolist()
+            # self.points = points.tolist()
+            self.points = points
         elif isinstance(points, list):
             self.points = points
         else:
@@ -37,10 +41,10 @@ class Polygon:
         self.dimensionality = dimensionality
         self._check_valid()
 
-#     def _check_valid(self):
-#         if len(self.points) % self.dimensionality != 0:
-#             logger.error(f"len(self.points) is not divisible by self.dimensionality={self.dimensionality}")
-#             raise Exception
+    def _check_valid(self):
+        if len(self.points) % self.dimensionality != 0:
+            # logger.error(f"len(self.points) is not divisible by self.dimensionality={self.dimensionality}")
+            raise Exception
 #
 #     def __len__(self) -> int:
 #         return len(self.points) // self.dimensionality
@@ -228,18 +232,11 @@ class Polygon:
 #         else:
 #             return Polygon(points=points, dimensionality=dimensionality)
 #
-#     @classmethod
-#     def from_point_list(self, point_list: list, dimensionality: int = 2) -> Polygon:
-#         check_type_from_list(item_list=point_list, valid_type_list=[Point])
-#         result = []
-#         for i, point in enumerate(point_list):
-#             numpy_array = np.array(point.to_list())
-#             if numpy_array.shape != (dimensionality,):
-#                 logger.error(
-#                     f"Found point at index {i} of point_list with a shape of {numpy_array.shape} != {(dimensionality,)}")
-#                 raise Exception
-#             result.extend(point.to_list())
-#         return Polygon(points=result, dimensionality=dimensionality)
+# @classmethod def from_point_list(self, point_list: list, dimensionality: int = 2) -> Polygon: check_type_from_list(
+# item_list=point_list, valid_type_list=[Point]) result = [] for i, point in enumerate(point_list): numpy_array =
+# np.array(point.to_list()) if numpy_array.shape != (dimensionality,): logger.error( f"Found point at index {i} of
+# point_list with a shape of {numpy_array.shape} != {(dimensionality,)}") raise Exception result.extend(
+# point.to_list()) return Polygon(points=result, dimensionality=dimensionality)
 #
 #     @classmethod
 #     def fix_shapely_invalid(self, shapely_polygon: ShapelyPolygon) -> ShapelyPolygon:
@@ -320,9 +317,9 @@ class Polygon:
 #                     logger.error(f"type(merged_polygon): {type(merged_polygon)}")
 #                     raise Exception
 #
-#                 logger.yellow(f"{i + 1}/{len(valid_polygon_list)}: type(merged_polygon): {type(merged_polygon)}")
-#                 # logger.yellow(f"{i+1}/{len(valid_polygon_list)}: type(merged_polygon.exterior): {type(merged_polygon.exterior)}")
-#             logger.blue(f"{i + 1}/{len(valid_polygon_list)}: valid_polygon.size(): {valid_polygon.size()}")
+# logger.yellow(f"{i + 1}/{len(valid_polygon_list)}: type(merged_polygon): {type(merged_polygon)}") # logger.yellow(
+# f"{i+1}/{len(valid_polygon_list)}: type(merged_polygon.exterior): {type(merged_polygon.exterior)}") logger.blue(f"{
+# i + 1}/{len(valid_polygon_list)}: valid_polygon.size(): {valid_polygon.size()}")
 #
 #         import sys
 #         sys.exit()
@@ -543,27 +540,15 @@ class Polygon:
 #     def within_bbox(self, bbox: BBox) -> bool:
 #         return all([polygon.within_bbox(bbox) for polygon in self])
 #
-#     def within(self, obj) -> bool:
-#         check_type(item=obj, valid_type_list=[Polygon, BBox])
-#         if type(obj) is BBox:  # necessary?
-#             bbox_contains_seg = None
-#             for polygon in self:
-#                 if len(polygon.to_list(demarcation=True)) < 3:
-#                     continue
-#                 poly_in_bbox = obj.contains(polygon)
-#                 bbox_contains_seg = bbox_contains_seg and poly_in_bbox if bbox_contains_seg is not None else poly_in_bbox
-#             bbox_contains_seg = bbox_contains_seg if bbox_contains_seg is not None else False
-#             return bbox_contains_seg
-#         elif type(obj) is Polygon:  # necessary?
-#             poly_contains_seg = None
-#             for polygon in self:
-#                 if len(polygon.to_list(demarcation=True)) < 3:
-#                     continue
-#                 poly_in_poly = obj.contains(polygon)
-#                 poly_contains_seg = poly_contains_seg and poly_in_poly if poly_contains_seg is not None else poly_in_poly
-#             poly_contains_seg = poly_contains_seg if poly_contains_seg is not None else False
-#             return poly_contains_seg
-#         return all([polygon.within(obj) for polygon in self])
+# def within(self, obj) -> bool: check_type(item=obj, valid_type_list=[Polygon, BBox]) if type(obj) is BBox:  #
+# necessary? bbox_contains_seg = None for polygon in self: if len(polygon.to_list(demarcation=True)) < 3: continue
+# poly_in_bbox = obj.contains(polygon) bbox_contains_seg = bbox_contains_seg and poly_in_bbox if bbox_contains_seg is
+# not None else poly_in_bbox bbox_contains_seg = bbox_contains_seg if bbox_contains_seg is not None else False return
+# bbox_contains_seg elif type(obj) is Polygon:  # necessary? poly_contains_seg = None for polygon in self: if len(
+# polygon.to_list(demarcation=True)) < 3: continue poly_in_poly = obj.contains(polygon) poly_contains_seg =
+# poly_contains_seg and poly_in_poly if poly_contains_seg is not None else poly_in_poly poly_contains_seg =
+# poly_contains_seg if poly_contains_seg is not None else False return poly_contains_seg return all([polygon.within(
+# obj) for polygon in self])
 #
 #     def merge(self) -> Segmentation:
 #         return Segmentation(
@@ -674,9 +659,9 @@ class Polygon:
 #         Arguments:
 #             img_shape {np.ndarray} -- [Shape of the frame.]
 #
-#         Keyword Arguments:
-#             fully {bool} -- [If true, polygons that are fully outside of the frame will be removed.] (default: {True})
-#             partly {bool} -- [If true, polygons that are partially outside of the frame will be removed.] (default: {False})
+# Keyword Arguments: fully {bool} -- [If true, polygons that are fully outside of the frame will be removed.] (
+# default: {True}) partly {bool} -- [If true, polygons that are partially outside of the frame will be removed.] (
+# default: {False})
 #
 #         Returns:
 #             [Segmentation] -- [Segmentation object]
@@ -725,21 +710,13 @@ class Polygon:
 #         else:
 #             return self
 #
-#     @classmethod
-#     def __get_multipoly_inter_shapely(cls, imgaug_polys: ImgAugPolygons, img_shape: np.ndarray) -> list:
-#         h, w = img_shape[:2]
-#         result = []
-#         for imgaug_poly in imgaug_polys:
-#             if imgaug_poly.coords.shape[0] < 3:
-#                 logger.warning(
-#                     f'Encountered imgaug_poly.coords.shape[0] < 3. imgaug_poly.coords.shape={imgaug_poly.coords.shape}')
-#                 logger.warning(f'Ignoring polygon.')
-#                 continue
-#             poly_shapely = imgaug_poly.to_shapely_polygon()
-#             poly_image = shapely.geometry.Polygon([(0, 0), (w, 0), (w, h), (0, h)])
-#             multipoly_inter_shapely = poly_shapely.intersection(poly_image)
-#             result.append(multipoly_inter_shapely)
-#         return result
+# @classmethod def __get_multipoly_inter_shapely(cls, imgaug_polys: ImgAugPolygons, img_shape: np.ndarray) -> list:
+# h, w = img_shape[:2] result = [] for imgaug_poly in imgaug_polys: if imgaug_poly.coords.shape[0] < 3:
+# logger.warning( f'Encountered imgaug_poly.coords.shape[0] < 3. imgaug_poly.coords.shape={
+# imgaug_poly.coords.shape}') logger.warning(f'Ignoring polygon.') continue poly_shapely =
+# imgaug_poly.to_shapely_polygon() poly_image = shapely.geometry.Polygon([(0, 0), (w, 0), (w, h), (0,
+# h)]) multipoly_inter_shapely = poly_shapely.intersection(poly_image) result.append(multipoly_inter_shapely) return
+# result
 #
 #     @classmethod
 #     def __prune_imgaug_polys(cls, imgaug_polys: ImgAugPolygons, img_shape: np.ndarray) -> ImgAugPolygons:
