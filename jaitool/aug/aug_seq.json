@@ -1,0 +1,104 @@
+{
+  "__version__": "0.4.6",
+  "transform": {
+    "__class_fullname__": "albumentations.core.composition.Compose",
+    "p": 1.0,
+    "transforms": [
+      {
+        "__class_fullname__": "albumentations.core.composition.OneOf",
+        "p": 1.0,
+        "transforms": [
+          {
+            "__class_fullname__": "albumentations.augmentations.transforms.RGBShift",
+            "always_apply": false,
+            "p": 1.0,
+            "r_shift_limit": [-15, 15],
+            "g_shift_limit": [-15, 15],
+            "b_shift_limit": [-15, 15]
+          },
+          {
+            "__class_fullname__": "albumentations.augmentations.transforms.RandomBrightnessContrast",
+            "always_apply": false,
+            "p": 1.0,
+            "brightness_limit": [-0.2, 0.2],
+            "contrast_limit": [-0.2, 0.2],
+            "brightness_by_max": true
+          }
+        ]
+      },
+      {
+        "__class_fullname__": "albumentations.core.composition.OneOf",
+        "p": 1.0,
+        "transforms": [
+          {
+            "__class_fullname__": "albumentations.augmentations.transforms.GaussNoise",
+            "always_apply": false,
+            "p": 1.0,
+            "var_limit": [10, 100]
+          },
+          {
+            "__class_fullname__": "albumentations.augmentations.transforms.ISONoise",
+            "always_apply": false,
+            "p": 1.0,
+            "intensity": [0.1, 1.0],
+            "color_shift": [0.01, 0.3]
+          },
+          {
+            "__class_fullname__": "albumentations.augmentations.transforms.MultiplicativeNoise",
+            "always_apply": false,
+            "p": 1.0,
+            "multiplier": [0.8, 1.6],
+            "per_channel": true,
+            "elementwise": true
+          }
+        ]
+      },
+      {
+        "__class_fullname__": "albumentations.core.composition.OneOf",
+        "p": 1.0,
+        "transforms": [
+          {
+            "__class_fullname__": "albumentations.augmentations.transforms.Equalize",
+            "always_apply": false,
+            "p": 1.0,
+            "mode": "pil",
+            "by_channels": true
+          },
+          {
+            "__class_fullname__": "albumentations.augmentations.transforms.InvertImg",
+            "always_apply": false,
+            "p": 1.0
+          },
+          {
+            "__class_fullname__": "albumentations.augmentations.transforms.MotionBlur",
+            "always_apply": false,
+            "p": 1.0,
+            "blur_limit": [3, 7]
+          },
+          {
+            "__class_fullname__": "albumentations.augmentations.transforms.OpticalDistortion",
+            "always_apply": false,
+            "p": 1.0,
+            "distort_limit": [-0.3, 0.3],
+            "shift_limit": [-0.05, 0.05],
+            "interpolation": 0,
+            "border_mode": 0,
+            "value": [0, 0, 0],
+            "mask_value": null
+          },
+          {
+            "__class_fullname__": "albumentations.augmentations.transforms.RandomFog",
+            "always_apply": false,
+            "p": 1.0,
+            "fog_coef_lower": 0.1,
+            "fog_coef_upper": 0.45,
+            "alpha_coef": 0.5
+          }
+        ]
+      }
+    ],
+    "bbox_params": null,
+    "keypoint_params": null,
+    "additional_targets": {}
+  }
+}

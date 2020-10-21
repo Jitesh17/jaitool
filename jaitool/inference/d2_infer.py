@@ -335,6 +335,7 @@ class D2Inferer:
                     if show_image(output):
                         break
                 elif output_type == "write_image":
+                    make_dir_if_not_exists(output_path)
                     filename = f.get_filename(image_path)
                     cv2.imwrite(f'{output_path}/{filename}', output)
                 elif output_type == "write_video":
@@ -349,6 +350,7 @@ class D2Inferer:
                     if show_image(output):
                         break
                 elif output_type == "write_image":
+                    make_dir_if_not_exists(output_path)
                     filename = f.get_filename(image_path)
                     cv2.imwrite(f'{output_path}/{filename}', output)
                 elif output_type == "write_video":

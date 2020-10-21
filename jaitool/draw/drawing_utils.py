@@ -4,7 +4,8 @@ import numpy as np
 from pyjeasy.image_utils.edit import resize_img
 from torch._C import Size
 
-from jaitool.structures.bbox import BBox
+from jaitool.structures import BBox, Segmentation
+# from jaitool.structures import BBox, Segmentation
 from pyjeasy.check_utils import check_value
 import printj
 from printj import red as error
@@ -118,6 +119,29 @@ def draw_mask_bool(
     else:
         mask_image = np.zeros(shape=result.shape[:2], dtype=np.uint8)
         mask_image[mask_bool] = 255
+        result = draw_mask_image(img=result, mask_image=mask_image, color=color, scale=255,
+                                 alpha=alpha, beta=beta, gamma=gamma)
+    return result
+
+
+def draw_mask_contour(
+        img: np.ndarray, mask_bool: Segmentation, color=None,
+        transparent: bool = False, alpha: float = 0.3, beta: float = 1, gamma: float = 0) -> np.ndarray:
+    """
+
+    Returns
+    -------
+    np.ndarray
+    """
+    if color is None:
+        color = [255, 255, 0]
+    result = img.copy()
+    contours=mask_bool.to_contour()
+    if not transparent:
+        result = cv2.drawContours(image=result, contours=contours, contourIdx=-1, color=color, thickness=-1)
+    else:
+        mask_image = np.zeros(shape=result.shape[:2], dtype=np.uint8)
+        mask_image = cv2.drawContours(image=mask_image, contours=contours, contourIdx=-1, color=(255, 255, 255), thickness=-1)
         result = draw_mask_image(img=result, mask_image=mask_image, color=color, scale=255,
                                  alpha=alpha, beta=beta, gamma=gamma)
     return result

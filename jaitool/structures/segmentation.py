@@ -4,6 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 
+from jaitool.structures import BBox
 # import cv2
 # from shapely.geometry import Point as ShapelyPoint
 # from shapely.geometry.polygon import Polygon as ShapelyPolygon
@@ -149,11 +150,11 @@ class Polygon:
 #     def to_float(self) -> Polygon:
 #         return Polygon(points=[float(val) for val in self.points], dimensionality=self.dimensionality)
 #
-#     def to_list(self, demarcation: bool = False) -> list:
-#         if demarcation:
-#             return np.array(self.points).reshape(-1, self.dimensionality).tolist()
-#         else:
-#             return self.points
+    def to_list(self, demarcation: bool = False) -> list:
+        if demarcation:
+            return np.array(self.points).reshape(-1, self.dimensionality).tolist()
+        else:
+            return self.points
 #
 #     def to_point_list(self) -> list:
 #         return [Point(coords=coords) for coords in self.to_list(demarcation=True)]
@@ -161,14 +162,14 @@ class Polygon:
 #     def to_shapely(self) -> ShapelyPolygon:
 #         return ShapelyPolygon(self.to_list(demarcation=True))
 #
-#     def to_contour(self) -> np.ndarray:
-#         return np.array(self.to_int().to_list()).reshape(-1, 1, self.dimensionality)
+    def to_contour(self) -> np.ndarray:
+        return np.array(self.to_int().to_list()).reshape(-1, 1, self.dimensionality)
 #
-#     def to_bbox(self) -> BBox:
-#         points = np.array(self.to_list(demarcation=True))
-#         xmin, ymin = points.min(axis=0)
-#         xmax, ymax = points.max(axis=0)
-#         return BBox(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax)
+    def to_bbox(self) -> BBox:
+        points = np.array(self.to_list(demarcation=True))
+        xmin, ymin = points.min(axis=0)
+        xmax, ymax = points.max(axis=0)
+        return BBox(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax)
 #
 #     def area(self) -> float:
 #         return self.to_shapely().area
@@ -369,19 +370,19 @@ class Polygon:
 #         )
 #
 #
-# class Segmentation:
-#     def __init__(self, polygon_list: list = None):
-#         if polygon_list is not None:
-#             check_type(item=polygon_list, valid_type_list=[list])
-#             check_type_from_list(item_list=polygon_list, valid_type_list=[Polygon])
-#             for i, polygon in enumerate(polygon_list):
-#                 if polygon.dimensionality != 2:
-#                     logger.error(f"Found polygon of dimensionality {polygon.dimensionality} at index {i}")
-#                     logger.error(f"All polygons must be of dimensionality 2.")
-#                     raise Exception
-#             self.polygon_list = polygon_list
-#         else:
-#             self.polygon_list = []
+class Segmentation:
+    def __init__(self, polygon_list: list = None):
+        if polygon_list is not None:
+            # check_type(item=polygon_list, valid_type_list=[list])
+            # check_type_from_list(item_list=polygon_list, valid_type_list=[Polygon])
+            for i, polygon in enumerate(polygon_list):
+                if polygon.dimensionality != 2:
+                    # logger.error(f"Found polygon of dimensionality {polygon.dimensionality} at index {i}")
+                    # logger.error(f"All polygons must be of dimensionality 2.")
+                    raise Exception
+            self.polygon_list = polygon_list
+        else:
+            self.polygon_list = []
 #
 #     def __str__(self):
 #         return f"{get_class_string(self)}: {self.polygon_list}"
@@ -406,17 +407,17 @@ class Polygon:
 #         check_type(value, valid_type_list=[Polygon])
 #         self.polygon_list[idx] = value
 #
-#     def __iter__(self):
-#         self.n = 0
-#         return self
+    def __iter__(self):
+        self.n = 0
+        return self
 #
-#     def __next__(self) -> Polygon:
-#         if self.n < len(self.polygon_list):
-#             result = self.polygon_list[self.n]
-#             self.n += 1
-#             return result
-#         else:
-#             raise StopIteration
+    def __next__(self) -> Polygon:
+        if self.n < len(self.polygon_list):
+            result = self.polygon_list[self.n]
+            self.n += 1
+            return result
+        else:
+            raise StopIteration
 #
 #     def __add__(self, other) -> Segmentation:
 #         if isinstance(other, Segmentation):
@@ -482,8 +483,8 @@ class Polygon:
 #     def to_float(self) -> Segmentation:
 #         return Segmentation([polygon.to_float() for polygon in self])
 #
-#     def to_list(self, demarcation: bool = False) -> list:
-#         return [polygon.to_list(demarcation=demarcation) for polygon in self]
+    def to_list(self, demarcation: bool = False) -> list:
+        return [polygon.to_list(demarcation=demarcation) for polygon in self]
 #
 #     def to_point_list(self) -> list:
 #         return [polygon.to_point_list() for polygon in self]
@@ -491,18 +492,18 @@ class Polygon:
 #     def to_shapely(self) -> list:
 #         return [polygon.to_shapely() for polygon in self]
 #
-#     def to_contour(self) -> list:  # combine?
-#         return [polygon.to_contour() for polygon in self]
+    def to_contour(self) -> list:  # combine?
+        return [polygon.to_contour() for polygon in self]
 #
-#     def to_bbox(self) -> BBox:
-#         seg_bbox_list = [polygon.to_bbox() for polygon in self]
-#         seg_bbox_xmin = min([seg_bbox.xmin for seg_bbox in seg_bbox_list])
-#         seg_bbox_ymin = min([seg_bbox.ymin for seg_bbox in seg_bbox_list])
-#         seg_bbox_xmax = max([seg_bbox.xmax for seg_bbox in seg_bbox_list])
-#         seg_bbox_ymax = max([seg_bbox.ymax for seg_bbox in seg_bbox_list])
-#         result_bbox = BBox(xmin=seg_bbox_xmin, ymin=seg_bbox_ymin, xmax=seg_bbox_xmax, ymax=seg_bbox_ymax).to_float()
-#         return result_bbox
-#
+    def to_bbox(self) -> BBox:
+        seg_bbox_list = [polygon.to_bbox() for polygon in self]
+        seg_bbox_xmin = min([seg_bbox.xmin for seg_bbox in seg_bbox_list])
+        seg_bbox_ymin = min([seg_bbox.ymin for seg_bbox in seg_bbox_list])
+        seg_bbox_xmax = max([seg_bbox.xmax for seg_bbox in seg_bbox_list])
+        seg_bbox_ymax = max([seg_bbox.ymax for seg_bbox in seg_bbox_list])
+        result_bbox = BBox(xmin=seg_bbox_xmin, ymin=seg_bbox_ymin, xmax=seg_bbox_xmax, ymax=seg_bbox_ymax).to_float()
+        return result_bbox
+
 #     def area(self) -> float:
 #         return sum([polygon.area() for polygon in self])
 #
