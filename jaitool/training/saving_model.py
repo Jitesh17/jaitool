@@ -1,7 +1,9 @@
-import torch
 import os
 import shutil
-from pyjeasy.file_utils import move_file, file_exists, make_dir_if_not_exists
+
+import torch
+from pyjeasy.file_utils import file_exists, make_dir_if_not_exists, move_file
+
 
 def save_ckp(state, checkpoint_dir, best_model_dir, filename_pth='checkpoint.pth'):
     """
@@ -12,10 +14,10 @@ def save_ckp(state, checkpoint_dir, best_model_dir, filename_pth='checkpoint.pth
     }
     save_ckp(checkpoint, is_best, checkpoint_dir, model_dir)
     """
-    
+
     make_dir_if_not_exists(checkpoint_dir)
     make_dir_if_not_exists(best_model_dir)
-    
+
     best_fpath = os.path.join(best_model_dir, 'best_model.pth')
     rename_f_path = os.path.join(best_model_dir, filename_pth)
     f_path = os.path.join(checkpoint_dir, filename_pth)
@@ -26,6 +28,7 @@ def save_ckp(state, checkpoint_dir, best_model_dir, filename_pth='checkpoint.pth
     # shutil.copyfile(f_path, best_fpath)
     # torch.save(state, f_path)
     # if is_best:
+
 
 def load_ckp(checkpoint_fpath, model, optimizer):
     """

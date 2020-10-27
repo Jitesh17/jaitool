@@ -9,6 +9,9 @@ def get_augmentation(save_path=None, load_path=None):
             aug_seq1 = A.OneOf([
                 A.Rotate(limit=(-90, 90), p=1.0),
                 A.Flip(p=1.0),
+                A.OpticalDistortion(always_apply=False, p=1.0, distort_limit=(-0.3, 0.3), 
+                                    shift_limit=(-0.05, 0.05), interpolation=3, 
+                                    border_mode=3, value=(0, 0, 0), mask_value=None),
             ], p=1.0)
             aug_seq2 = A.OneOf([
                 # A.ChannelDropout(always_apply=False, p=1.0, channel_drop_range=(1, 1), fill_value=0),
@@ -18,7 +21,7 @@ def get_augmentation(save_path=None, load_path=None):
                     -0.2, 0.2), contrast_limit=(-0.2, 0.2), brightness_by_max=True)
             ], p=1.0)
             aug_seq3 = A.OneOf([
-                A.GaussNoise(always_apply=False, p=1.0, var_limit=(10, 100)),
+                A.GaussNoise(always_apply=False, p=1.0, var_limit=(10, 50)),
                 A.ISONoise(always_apply=False, p=1.0, intensity=(
                     0.1, 1.0), color_shift=(0.01, 0.3)),
                 A.MultiplicativeNoise(always_apply=False, p=1.0, multiplier=(
@@ -29,11 +32,8 @@ def get_augmentation(save_path=None, load_path=None):
                            mode='pil', by_channels=True),
                 A.InvertImg(always_apply=False, p=1.0),
                 A.MotionBlur(always_apply=False, p=1.0, blur_limit=(3, 7)),
-                A.OpticalDistortion(always_apply=False, p=1.0, distort_limit=(-0.3, 0.3), 
-                                    shift_limit=(-0.05, 0.05), interpolation=0, 
-                                    border_mode=0, value=(0, 0, 0), mask_value=None),
-                A.RandomFog(always_apply=False, p=1.0, fog_coef_lower=0.1,
-                            fog_coef_upper=0.45, alpha_coef=0.5)
+                A.RandomFog(always_apply=False, p=1.0, 
+                            fog_coef_lower=0.01, fog_coef_upper=0.2, alpha_coef=0.2)
             ], p=1.0)
             aug_seq = A.Compose([
                 # A.Resize(self.img_size, self.img_size),
@@ -52,5 +52,5 @@ def get_augmentation(save_path=None, load_path=None):
         
 if __name__ == "__main__":
     get_augmentation(
-        save_path="/home/jitesh/prj/SekisuiProjects/test/gosar/bolt/training_scripts/aug_seq.json", 
+        save_path="/home/jitesh/prj/SekisuiProjects/test/gosar/bolt/training_scripts/aug_seq2.json", 
         load_path=None)

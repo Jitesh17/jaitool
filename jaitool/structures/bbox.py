@@ -4,14 +4,9 @@ from pandas.conftest import cls
 
 from .point import Point2D  # , Point2D_List
 from .keypoint import Keypoint2D
+from imgaug.augmentables.bbs import BoundingBox as ImgAugBBox, BoundingBoxesOnImage as ImgAugBBoxes
 
 
-# class BBox(object):
-#     def __init__(self, xmin, ymin, xmax, ymax):
-#         self.xmin = xmin
-#         self.ymin = ymin
-#         self.xmax = xmax
-#         self.ymax = ymax
 
 
 class BBox:
@@ -165,3 +160,15 @@ class BBox:
             return BBox(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax)
         else:
             raise Exception
+
+    def to_imgaug(self) -> ImgAugBBox:
+        return ImgAugBBox(x1=self.xmin, y1=self.ymin, x2=self.xmax, y2=self.ymax)
+
+    @classmethod
+    def from_imgaug(cls, imgaug_bbox: ImgAugBBox) -> BBox:
+        return BBox(
+            xmin=imgaug_bbox.x1,
+            ymin=imgaug_bbox.y1,
+            xmax=imgaug_bbox.x2,
+            ymax=imgaug_bbox.y2
+        )

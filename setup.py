@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="jaitool",
-    version="0.0.3",
+    version="0.0.5",
     author="Jitesh Gosar",
     author_email="gosar95@gmail.com",
     description="Tools for AI related task",
@@ -32,7 +32,7 @@ setup(
         "pyjeasy",
         "torch",
         "torchvision",
-        "pyyaml==5.1",
+        "pyyaml>=5.1",
         "pycocotools>=2.0.1",
         "opencv-python",
         "numpy",
@@ -40,7 +40,9 @@ setup(
         "shapely",
         # "git+https://github.com/facebookresearch/detectron2.git",
         "hypothesis",
-        "pytest"
+        "pytest",
+        "albumentations",
+        "seaborn",
     ],
     python_requires='>=3.6',
 )

@@ -2,9 +2,9 @@ from typing import Tuple
 import cv2
 import numpy as np
 import math
-
+from pyjeasy.image_utils.edit import concat_n_images
 # from logger import logger
-from common_utils.image_utils import concat_n_images
+# from common_utils.image_utils import concat_n_images
 
 class AugVisualizer:
     def __init__(self, vis_save_path: str, n_rows: int=3, n_cols: int=5, save_dims: Tuple[int]=(3*500, 5*500), wait: int=None):
@@ -45,7 +45,7 @@ class AugVisualizer:
             cv2.imwrite(self.vis_save_path, result)
             self.vis_buffer = []
 
-aug_visualizer = AugVisualizer(
-    vis_save_path='aug_vis.png',
-    wait=None
-)
+# aug_visualizer = AugVisualizer(
+#     vis_save_path='aug_vis.png',
+#     wait=None
+# )

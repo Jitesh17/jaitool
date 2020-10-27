@@ -2,15 +2,16 @@ from __future__ import annotations
 
 # from typing import List
 import numpy as np
+# from imgaug.augmentables.bbs import BoundingBox as ImgAugBBox, BoundingBoxesOnImage as ImgAugBBoxes
 
-
+import printj
 from jaitool.structures import BBox
 # import cv2
 # from shapely.geometry import Point as ShapelyPoint
 # from shapely.geometry.polygon import Polygon as ShapelyPolygon
 # from shapely.ops import cascaded_union, unary_union, polygonize
 # from shapely.geometry import LineString
-# from imgaug.augmentables.polys import Polygon as ImgAugPolygon, PolygonsOnImage as ImgAugPolygons
+from imgaug.augmentables.polys import Polygon as ImgAugPolygon, PolygonsOnImage as ImgAugPolygons
 # import imgaug
 
 
@@ -37,26 +38,26 @@ class Polygon:
         elif isinstance(points, list):
             self.points = points
         else:
-            # logger.error(f'Expected type(points) in [list, np.ndarray]')
+            # printj.red(f'Expected type(points) in [list, np.ndarray]')
             raise Exception
         self.dimensionality = dimensionality
         self._check_valid()
 
     def _check_valid(self):
         if len(self.points) % self.dimensionality != 0:
-            # logger.error(f"len(self.points) is not divisible by self.dimensionality={self.dimensionality}")
+            # printj.red(f"len(self.points) is not divisible by self.dimensionality={self.dimensionality}")
             raise Exception
 #
-#     def __len__(self) -> int:
-#         return len(self.points) // self.dimensionality
+    def __len__(self) -> int:
+        return len(self.points) // self.dimensionality
 #
 #     def has_valid_num_points(self) -> bool:
 #         return len(self) >= 3
 #
 #     def check_valid_num_points(self):
 #         if self.has_valid_num_points():
-#             logger.error(f'A polygon must be defined by at least 3 points.')
-#             logger.error(f'len(self.points) // self.dimensionality == {len(self.points) // self.dimensionality} < 3')
+#             printj.red(f'A polygon must be defined by at least 3 points.')
+#             printj.red(f'len(self.points) // self.dimensionality == {len(self.points) // self.dimensionality} < 3')
 #             raise Exception
 #
 #     def __str__(self):
@@ -84,7 +85,7 @@ class Polygon:
 #                 dimensionality=self.dimensionality, demarcation=False
 #             )
 #         else:
-#             logger.error(f'Cannot add {type(other)} to Polygon')
+#             printj.red(f'Cannot add {type(other)} to Polygon')
 #             raise TypeError
 #
 #     def __sub__(self, other) -> Polygon:
@@ -106,7 +107,7 @@ class Polygon:
 #                 dimensionality=self.dimensionality, demarcation=False
 #             )
 #         else:
-#             logger.error(f'Cannot subtract {type(other)} from Polygon')
+#             printj.red(f'Cannot subtract {type(other)} from Polygon')
 #             raise TypeError
 #
 #     def __mul__(self, other) -> Polygon:
@@ -116,7 +117,7 @@ class Polygon:
 #                 dimensionality=self.dimensionality, demarcation=False
 #             )
 #         else:
-#             logger.error(f'Cannot multiply {type(other)} with Polygon')
+#             printj.red(f'Cannot multiply {type(other)} with Polygon')
 #             raise TypeError
 #
 #     def __truediv__(self, other) -> Polygon:
@@ -126,7 +127,7 @@ class Polygon:
 #                 dimensionality=self.dimensionality, demarcation=False
 #             )
 #         else:
-#             logger.error(f'Cannot divide {type(other)} from Polygon')
+#             printj.red(f'Cannot divide {type(other)} from Polygon')
 #             raise TypeError
 #
 #     def __eq__(self, other: Polygon) -> bool:
@@ -137,18 +138,18 @@ class Polygon:
 #         else:
 #             return NotImplemented
 #
-#     @classmethod
-#     def buffer(self, polygon: Polygon) -> Polygon:
-#         return polygon
+    @classmethod
+    def buffer(self, polygon: Polygon) -> Polygon:
+        return polygon
+
+    def copy(self) -> Polygon:
+        return Polygon(points=self.points, dimensionality=self.dimensionality)
+
+    def to_int(self) -> Polygon:
+        return Polygon(points=[int(val) for val in self.points], dimensionality=self.dimensionality)
 #
-#     def copy(self) -> Polygon:
-#         return Polygon(points=self.points, dimensionality=self.dimensionality)
-#
-#     def to_int(self) -> Polygon:
-#         return Polygon(points=[int(val) for val in self.points], dimensionality=self.dimensionality)
-#
-#     def to_float(self) -> Polygon:
-#         return Polygon(points=[float(val) for val in self.points], dimensionality=self.dimensionality)
+    def to_float(self) -> Polygon:
+        return Polygon(points=[float(val) for val in self.points], dimensionality=self.dimensionality)
 #
     def to_list(self, demarcation: bool = False) -> list:
         if demarcation:
@@ -156,11 +157,11 @@ class Polygon:
         else:
             return self.points
 #
-#     def to_point_list(self) -> list:
-#         return [Point(coords=coords) for coords in self.to_list(demarcation=True)]
-#
-#     def to_shapely(self) -> ShapelyPolygon:
-#         return ShapelyPolygon(self.to_list(demarcation=True))
+    def to_point_list(self) -> list:
+        return [Point(coords=coords) for coords in self.to_list(demarcation=True)]
+
+    def to_shapely(self) -> ShapelyPolygon:
+        return ShapelyPolygon(self.to_list(demarcation=True))
 #
     def to_contour(self) -> np.ndarray:
         return np.array(self.to_int().to_list()).reshape(-1, 1, self.dimensionality)
@@ -208,8 +209,8 @@ class Polygon:
 #
 #     def resize(self, orig_frame_shape: list, new_frame_shape: list) -> Polygon:
 #         if self.dimensionality != 2:
-#             logger.error(f"Only resize of dimensionality 2 is supported at this time.")
-#             logger.error(f"This polygon is dimensionality: {self.dimensionality}")
+#             printj.red(f"Only resize of dimensionality 2 is supported at this time.")
+#             printj.red(f"This polygon is dimensionality: {self.dimensionality}")
 #             raise Exception
 #         orig_frame_h, orig_frame_w = orig_frame_shape[:2]
 #         new_frame_h, new_frame_w = new_frame_shape[:2]
@@ -225,17 +226,17 @@ class Polygon:
 #             new_point_list.append(new_point)
 #         return Polygon.from_point_list(point_list=new_point_list, dimensionality=2)
 #
-#     @classmethod
-#     def from_list(self, points: list, dimensionality: int = 2, demarcation: bool = False) -> Polygon:
-#         if demarcation:
-#             flattened_list = np.array(points).reshape(-1).tolist()
-#             return Polygon(points=flattened_list, dimensionality=dimensionality)
-#         else:
-#             return Polygon(points=points, dimensionality=dimensionality)
+    @classmethod
+    def from_list(self, points: list, dimensionality: int = 2, demarcation: bool = False) -> Polygon:
+        if demarcation:
+            flattened_list = np.array(points).reshape(-1).tolist()
+            return Polygon(points=flattened_list, dimensionality=dimensionality)
+        else:
+            return Polygon(points=points, dimensionality=dimensionality)
 #
 # @classmethod def from_point_list(self, point_list: list, dimensionality: int = 2) -> Polygon: check_type_from_list(
 # item_list=point_list, valid_type_list=[Point]) result = [] for i, point in enumerate(point_list): numpy_array =
-# np.array(point.to_list()) if numpy_array.shape != (dimensionality,): logger.error( f"Found point at index {i} of
+# np.array(point.to_list()) if numpy_array.shape != (dimensionality,): printj.red( f"Found point at index {i} of
 # point_list with a shape of {numpy_array.shape} != {(dimensionality,)}") raise Exception result.extend(
 # point.to_list()) return Polygon(points=result, dimensionality=dimensionality)
 #
@@ -246,21 +247,21 @@ class Polygon:
 #         polygons = list(polygonize(mls))
 #         return polygons[0]
 #
-#     @classmethod
-#     def from_shapely(self, shapely_polygon: ShapelyPolygon, fix_invalid: bool = False) -> Polygon:
-#         if not shapely_polygon.is_valid and fix_invalid:
-#             shapely_polygon = Polygon.fix_shapely_invalid(shapely_polygon)
-#
-#         vals_tuple = shapely_polygon.exterior.coords.xy
-#         numpy_array = np.array(vals_tuple).T[:-1]
-#         flattened_list = numpy_array.reshape(-1).tolist()
-#         dimensionality = numpy_array.shape[1]
-#         return Polygon(points=flattened_list, dimensionality=dimensionality)
-#
-#     @classmethod
-#     def from_contour(self, contour: np.ndarray) -> Polygon:
-#         cont = contour.reshape(contour.shape[0], contour.shape[2]).tolist()
-#         return self.from_list(points=cont, dimensionality=2, demarcation=True)
+    @classmethod
+    def from_shapely(self, shapely_polygon: ShapelyPolygon, fix_invalid: bool = False) -> Polygon:
+        if not shapely_polygon.is_valid and fix_invalid:
+            shapely_polygon = Polygon.fix_shapely_invalid(shapely_polygon)
+
+        vals_tuple = shapely_polygon.exterior.coords.xy
+        numpy_array = np.array(vals_tuple).T[:-1]
+        flattened_list = numpy_array.reshape(-1).tolist()
+        dimensionality = numpy_array.shape[1]
+        return Polygon(points=flattened_list, dimensionality=dimensionality)
+
+    @classmethod
+    def from_contour(self, contour: np.ndarray) -> Polygon:
+        cont = contour.reshape(contour.shape[0], contour.shape[2]).tolist()
+        return self.from_list(points=cont, dimensionality=2, demarcation=True)
 #
 #     @classmethod
 #     def from_polygon_list_to_merge(self, polygon_list: list) -> Polygon:
@@ -291,10 +292,10 @@ class Polygon:
 #                     new_polygon.plot()
 #                     plt.show()
 #                     if not merged_polygon.is_valid:
-#                         logger.error(f"merged_polygon is not valid")
+#                         printj.red(f"merged_polygon is not valid")
 #                         raise Exception
 #                     if not valid_polygon.to_shapely().is_valid:
-#                         logger.error(f"New polygon is not valid")
+#                         printj.red(f"New polygon is not valid")
 #                         raise Exception
 #                     if merged_polygon.intersects(valid_polygon.to_shapely()):
 #                         merged_polygon = merged_polygon.union(valid_polygon.to_shapely())
@@ -306,16 +307,16 @@ class Polygon:
 #                         if type(merged_polygon) is ShapelyPolygon:
 #                             logger.green(f"Fixed!")
 #                         elif type(merged_polygon) is ShapelyMultiPolygon:
-#                             logger.error(f"Not Fixed!")
+#                             printj.red(f"Not Fixed!")
 #                             raise Exception
 #                         else:
-#                             logger.error(f"Unknown type: {type(merged_polygon)}")
+#                             printj.red(f"Unknown type: {type(merged_polygon)}")
 #                             raise Exception
 #                 elif type(merged_polygon) is ShapelyMultiPolygon:
-#                     logger.error(f"Polygon turned into MultiPolygon in shapely!")
+#                     printj.red(f"Polygon turned into MultiPolygon in shapely!")
 #                     raise Exception
 #                 else:
-#                     logger.error(f"type(merged_polygon): {type(merged_polygon)}")
+#                     printj.red(f"type(merged_polygon): {type(merged_polygon)}")
 #                     raise Exception
 #
 # logger.yellow(f"{i + 1}/{len(valid_polygon_list)}: type(merged_polygon): {type(merged_polygon)}") # logger.yellow(
@@ -327,47 +328,47 @@ class Polygon:
 #         union = cascaded_union([valid_polygon.to_shapely() for valid_polygon in valid_polygon_list])
 #         return self.from_shapely(union)
 #
-#     def to_imgaug(self) -> ImgAugPolygon:
-#         if self.dimensionality == 2:
-#             return ImgAugPolygon(self.to_list(demarcation=True))
-#         else:
-#             raise NotImplementedError
+    def to_imgaug(self) -> ImgAugPolygon:
+        if self.dimensionality == 2:
+            return ImgAugPolygon(self.to_list(demarcation=True))
+        else:
+            raise NotImplementedError
 #
-#     @classmethod
-#     def from_imgaug(cls, imgaug_polygon: ImgAugPolygon, fix_invalid: bool = False) -> Polygon:
-#         return Polygon.from_shapely(imgaug_polygon.to_shapely_polygon(), fix_invalid=fix_invalid)
+    @classmethod
+    def from_imgaug(cls, imgaug_polygon: ImgAugPolygon, fix_invalid: bool = False) -> Polygon:
+        return Polygon.from_shapely(imgaug_polygon.to_shapely_polygon(), fix_invalid=fix_invalid)
+
+    def to_point2d_list(self) -> Point2D_List:
+        if self.dimensionality != 2:
+            printj.red(
+                f'Cannot convert polygon to Point2D_List because self.dimensionality=={self.dimensionality}!=2')
+            raise TypeError
+        return Point2D_List.from_list(self.to_list(demarcation=True))
 #
-#     def to_point2d_list(self) -> Point2D_List:
-#         if self.dimensionality != 2:
-#             logger.error(
-#                 f'Cannot convert polygon to Point2D_List because self.dimensionality=={self.dimensionality}!=2')
-#             raise TypeError
-#         return Point2D_List.from_list(self.to_list(demarcation=True))
+    @classmethod
+    def from_point2d_list(cls, point2d_list: Point2D_List) -> Polygon:
+        check_type(point2d_list, valid_type_list=[Point2D_List])
+        return Polygon.from_list(
+            points=point2d_list.to_list(demarcation=True),
+            dimensionality=2,
+            demarcation=True
+        )
 #
-#     @classmethod
-#     def from_point2d_list(cls, point2d_list: Point2D_List) -> Polygon:
-#         check_type(point2d_list, valid_type_list=[Point2D_List])
-#         return Polygon.from_list(
-#             points=point2d_list.to_list(demarcation=True),
-#             dimensionality=2,
-#             demarcation=True
-#         )
+    def to_point3d_list(self) -> Point3D_List:
+        if self.dimensionality != 3:
+            printj.red(
+                f'Cannot convert polygon to Point3D_List because self.dimensionality=={self.dimensionality}!=3')
+            raise TypeError
+        return Point3D_List.from_list(self.to_list(demarcation=True))
 #
-#     def to_point3d_list(self) -> Point3D_List:
-#         if self.dimensionality != 3:
-#             logger.error(
-#                 f'Cannot convert polygon to Point3D_List because self.dimensionality=={self.dimensionality}!=3')
-#             raise TypeError
-#         return Point3D_List.from_list(self.to_list(demarcation=True))
-#
-#     @classmethod
-#     def from_point3d_list(cls, point3d_list: Point3D_List) -> Polygon:
-#         check_type(point3d_list, valid_type_list=[Point3D_List])
-#         return Polygon.from_list(
-#             points=point3d_list.to_list(demarcation=True),
-#             dimensionality=3,
-#             demarcation=True
-#         )
+    @classmethod
+    def from_point3d_list(cls, point3d_list: Point3D_List) -> Polygon:
+        check_type(point3d_list, valid_type_list=[Point3D_List])
+        return Polygon.from_list(
+            points=point3d_list.to_list(demarcation=True),
+            dimensionality=3,
+            demarcation=True
+        )
 #
 #
 class Segmentation:
@@ -377,28 +378,28 @@ class Segmentation:
             # check_type_from_list(item_list=polygon_list, valid_type_list=[Polygon])
             for i, polygon in enumerate(polygon_list):
                 if polygon.dimensionality != 2:
-                    # logger.error(f"Found polygon of dimensionality {polygon.dimensionality} at index {i}")
-                    # logger.error(f"All polygons must be of dimensionality 2.")
+                    # printj.red(f"Found polygon of dimensionality {polygon.dimensionality} at index {i}")
+                    # printj.red(f"All polygons must be of dimensionality 2.")
                     raise Exception
             self.polygon_list = polygon_list
         else:
             self.polygon_list = []
 #
-#     def __str__(self):
-#         return f"{get_class_string(self)}: {self.polygon_list}"
-#
-#     def __repr__(self):
-#         return self.__str__()
-#
-#     def __len__(self) -> int:
-#         return len(self.polygon_list)
+    def __str__(self):
+        return f"{get_class_string(self)}: {self.polygon_list}"
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __len__(self) -> int:
+        return len(self.polygon_list)
 #
 #     def __getitem__(self, idx: int) -> Polygon:
 #         if len(self.polygon_list) == 0:
-#             logger.error(f"polygon_list is empty.")
+#             printj.red(f"polygon_list is empty.")
 #             raise IndexError
 #         elif idx < 0 or idx >= len(self.polygon_list):
-#             logger.error(f"Index out of range: {idx}")
+#             printj.red(f"Index out of range: {idx}")
 #             raise IndexError
 #         else:
 #             return self.polygon_list[idx]
@@ -426,7 +427,7 @@ class Segmentation:
 #
 #             # for poly in self:
 #             #     if other.contains(poly):
-#             #         logger.error(f'Cannot add two segmentations that overlap.')
+#             #         printj.red(f'Cannot add two segmentations that overlap.')
 #             #         raise Exception
 #
 #             # TODO: Figure out how to merge polygons properly.
@@ -434,28 +435,28 @@ class Segmentation:
 #         elif isinstance(other, (Point2D, Keypoint2D, int, float)):
 #             return Segmentation([poly + other for poly in self])
 #         else:
-#             logger.error(f'Cannot add {type(other)} to Segmentation')
+#             printj.red(f'Cannot add {type(other)} to Segmentation')
 #             raise TypeError
 #
 #     def __sub__(self, other) -> Segmentation:
 #         if isinstance(other, (Point2D, Keypoint2D, int, float)):
 #             return Segmentation([poly - other for poly in self])
 #         else:
-#             logger.error(f'Cannot subtract {type(other)} from Segmentation')
+#             printj.red(f'Cannot subtract {type(other)} from Segmentation')
 #             raise TypeError
 #
 #     def __mul__(self, other) -> Segmentation:
 #         if isinstance(other, (int, float)):
 #             return Segmentation([poly * other for poly in self])
 #         else:
-#             logger.error(f'Cannot multiply {type(other)} with Segmentation')
+#             printj.red(f'Cannot multiply {type(other)} with Segmentation')
 #             raise TypeError
 #
 #     def __truediv__(self, other) -> Segmentation:
 #         if isinstance(other, (int, float)):
 #             return Segmentation([poly / other for poly in self])
 #         else:
-#             logger.error(f'Cannot divide {type(other)} from Segmentation')
+#             printj.red(f'Cannot divide {type(other)} from Segmentation')
 #             raise TypeError
 #
 #     def __eq__(self, other: Segmentation) -> bool:
@@ -485,12 +486,12 @@ class Segmentation:
 #
     def to_list(self, demarcation: bool = False) -> list:
         return [polygon.to_list(demarcation=demarcation) for polygon in self]
-#
-#     def to_point_list(self) -> list:
-#         return [polygon.to_point_list() for polygon in self]
-#
-#     def to_shapely(self) -> list:
-#         return [polygon.to_shapely() for polygon in self]
+
+    def to_point_list(self) -> list:
+        return [polygon.to_point_list() for polygon in self]
+
+    def to_shapely(self) -> list:
+        return [polygon.to_shapely() for polygon in self]
 #
     def to_contour(self) -> list:  # combine?
         return [polygon.to_contour() for polygon in self]
@@ -510,9 +511,9 @@ class Segmentation:
 #     def centroid(self) -> Point:
 #         poly_dim_valid = [polygon.dimensionality == 2 for polygon in self]
 #         if False in poly_dim_valid:
-#             logger.error(f'Found polygon of dimensionality != 2 in segmentation.')
-#             logger.error(f'Dimensionalities found: {[polygon.dimensionality for polygon in self]}')
-#             logger.error(f'Cannot calculate centroid.')
+#             printj.red(f'Found polygon of dimensionality != 2 in segmentation.')
+#             printj.red(f'Dimensionalities found: {[polygon.dimensionality for polygon in self]}')
+#             printj.red(f'Cannot calculate centroid.')
 #             raise Exception
 #         poly_c = [polygon.centroid() for polygon in self]
 #         poly_a = [polygon.area() for polygon in self]
@@ -568,15 +569,15 @@ class Segmentation:
 #             new_polygon_list.append(new_polygon)
 #         return Segmentation(polygon_list=new_polygon_list)
 #
-#     @classmethod
-#     def from_list(self, points_list: list, demarcation: bool = False) -> Segmentation:
-#         return Segmentation(
-#             polygon_list=[
-#                 Polygon.from_list(
-#                     points=points, dimensionality=2, demarcation=demarcation
-#                 ) for points in points_list
-#             ]
-#         )
+    @classmethod
+    def from_list(self, points_list: list, demarcation: bool = False) -> Segmentation:
+        return Segmentation(
+            polygon_list=[
+                Polygon.from_list(
+                    points=points, dimensionality=2, demarcation=demarcation
+                ) for points in points_list
+            ]
+        )
 #
 #     @classmethod
 #     def from_point_list(self, point_list_list: list) -> Segmentation:
@@ -605,46 +606,46 @@ class Segmentation:
 #             ]
 #         )
 #
-#     @classmethod
-#     def from_contour(self, contour_list: list, exclude_invalid_polygons: bool = False) -> Segmentation:
-#         contour_list0 = contour_list.copy()
-#         if exclude_invalid_polygons:
-#             del_idx_list = []
-#             for i in range(len(contour_list0)):
-#                 if len(contour_list0[i]) < 3:
-#                     del_idx_list.append(i)
-#             for del_idx in del_idx_list[::-1]:
-#                 del contour_list0[del_idx]
+    @classmethod
+    def from_contour(self, contour_list: list, exclude_invalid_polygons: bool = False) -> Segmentation:
+        contour_list0 = contour_list.copy()
+        if exclude_invalid_polygons:
+            del_idx_list = []
+            for i in range(len(contour_list0)):
+                if len(contour_list0[i]) < 3:
+                    del_idx_list.append(i)
+            for del_idx in del_idx_list[::-1]:
+                del contour_list0[del_idx]
+
+        return Segmentation(
+            polygon_list=[
+                Polygon.from_contour(
+                    contour=contour
+                ) for contour in contour_list0
+            ]
+        )
+
+    def to_imgaug(self, img_shape: np.ndarray) -> ImgAugPolygons:
+        return ImgAugPolygons(
+            polygons=[poly.to_imgaug() for poly in self.polygon_list],
+            shape=img_shape
+        )
+
+    @classmethod
+    def from_imgaug(cls, imgaug_polygons: ImgAugPolygons, fix_invalid: bool = False) -> Segmentation:
+        return Segmentation(
+            polygon_list=[Polygon.from_imgaug(imgaug_polygon, fix_invalid=fix_invalid) for imgaug_polygon in
+                          imgaug_polygons.polygons]
+        )
 #
-#         return Segmentation(
-#             polygon_list=[
-#                 Polygon.from_contour(
-#                     contour=contour
-#                 ) for contour in contour_list0
-#             ]
-#         )
-#
-#     def to_imgaug(self, img_shape: np.ndarray) -> ImgAugPolygons:
-#         return ImgAugPolygons(
-#             polygons=[poly.to_imgaug() for poly in self.polygon_list],
-#             shape=img_shape
-#         )
-#
-#     @classmethod
-#     def from_imgaug(cls, imgaug_polygons: ImgAugPolygons, fix_invalid: bool = False) -> Segmentation:
-#         return Segmentation(
-#             polygon_list=[Polygon.from_imgaug(imgaug_polygon, fix_invalid=fix_invalid) for imgaug_polygon in
-#                           imgaug_polygons.polygons]
-#         )
-#
-#     def to_point2d_list_list(self) -> List[Point2D_List]:
-#         return [polygon.to_point2d_list() for polygon in self]
-#
-#     @classmethod
-#     def from_point2d_list_list(cls, point2d_list_list: List[Point2D_List]) -> Segmentation:
-#         return Segmentation(
-#             polygon_list=[Polygon.from_point2d_list(point2d_list) for point2d_list in point2d_list_list]
-#         )
+    def to_point2d_list_list(self) -> List[Point2D_List]:
+        return [polygon.to_point2d_list() for polygon in self]
+
+    @classmethod
+    def from_point2d_list_list(cls, point2d_list_list: List[Point2D_List]) -> Segmentation:
+        return Segmentation(
+            polygon_list=[Polygon.from_point2d_list(point2d_list) for point2d_list in point2d_list_list]
+        )
 #
 #     @classmethod
 #     def __remove_out_of_image(cls, img_aug_polys: ImgAugPolygons, fully: bool = True,

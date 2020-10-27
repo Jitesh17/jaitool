@@ -1,16 +1,17 @@
 # from __future__ import annotations
+import json
 import timeit
 from datetime import datetime
 from functools import partial
+from shutil import Error
 from sys import exit as x
 from typing import List, Union
 
 import cv2
-import numpy as np
-import printj  # pip install printj
-from tqdm import tqdm
-
 import jaitool.inference.d2_infer
+import numpy as np
+import printj
+from pyjeasy.check_utils.check import check_file_exists  # pip install printj
 import pyjeasy.file_utils as f
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
@@ -22,6 +23,7 @@ from pyjeasy.file_utils import (delete_dir, delete_dir_if_exists, dir_exists,
                                 make_dir_if_not_exists)
 from pyjeasy.image_utils.output import show_image
 from seaborn import color_palette
+from tqdm import tqdm
 
 
 class D2Inferer:
@@ -118,6 +120,7 @@ class D2Inferer:
         if size_max is not None:
             self.cfg.INPUT.MAX_SIZE_TEST = size_max
         self.predictor = DefaultPredictor(self.cfg)
+        self.pred_dataset=[]
 
     def get_outputs(self, img: np.ndarray) -> dict:
         ''''''
@@ -203,13 +206,19 @@ class D2Inferer:
                     show_segmentation: bool = True,
                     transparent_mask: bool = True,
                     transparency_alpha: float = 0.3,
-                    ignore_keypoint_idx=None,) -> np.ndarray:
+                    ignore_keypoint_idx=None,
+                    gt_path: str=None,) -> np.ndarray:
         '''Returns the Inference result of a single image.'''
+        # if gt_path:
+        #     with open(gt_path) as json_file:
+        #         gt_data = json.load(json_file)
         if ignore_keypoint_idx is None:
             ignore_keypoint_idx = []
         img = cv2.imread(image_path)
         output = img.copy()
         predict_dict = self.predict(img=img)
+        output = self.draw_gt(image_path, output)
+        printj.cyan(predict_dict)
         score_list = predict_dict['score_list']
         bbox_list = predict_dict['bbox_list']
         pred_class_list = predict_dict['pred_class_list']
@@ -221,11 +230,11 @@ class D2Inferer:
         
         palette = np.array(color_palette(None, self.num_classes+1))*255
         
+        max_score_list = dict()
+        max_score_pred_list = dict()
         if show_max_score_only:
-            max_score_list = dict()
             for i, class_name in enumerate(self.class_names):
                 max_score_list[class_name] = -1
-            max_score_pred_list = dict()
         for score, pred_class, bbox, mask, keypoints, vis_keypoints, kpt_confidences in zip(score_list,
                                                                                             pred_class_list,
                                                                                             bbox_list,
@@ -257,6 +266,15 @@ class D2Inferer:
                     output = draw_keypoints(img=output, keypoints=keypoints, show_keypoints=show_keypoints,
                                             keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
                                             ignore_kpt_idx=ignore_keypoint_idx)
+                xmin, ymin, xmax, ymax = bbox.to_int().to_list()
+                self.pred_dataset.append(
+                    {
+                        "image_id": self.image_id, 
+                        "category_id": self.class_names.index(pred_class), 
+                        "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format = 'pminsize'), 
+                        "score": score,
+                    }
+                )
         
         if show_max_score_only:
             for i, class_name in enumerate(self.class_names):
@@ -271,6 +289,7 @@ class D2Inferer:
                         output = draw_keypoints(img=output, keypoints=max_pred["keypoints"], show_keypoints=show_keypoints,
                                                 keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
                                                 ignore_kpt_idx=ignore_keypoint_idx)
+                        
         return output
 
     def infer(self, input_type: Union[str, int], 
@@ -286,7 +305,8 @@ class D2Inferer:
               transparent_mask: bool = True,
                     transparency_alpha: float = 0.3,
                     ignore_keypoint_idx=None,
-              gt_path: Union[str, List[str]] = '/home/jitesh/3d/data/coco_data/hook_test/json/cropped_hook.json'):
+              gt_path: Union[str, List[str]] = None,
+              result_json_path: str= None):
         """
         
         Valid options for,
@@ -310,16 +330,27 @@ class D2Inferer:
                                 "video_list", "video_directory"])
         check_value(value=output_type, check_from=[
                     "show_image", "write_image", "write_video"])
-
+        self.gt_path = gt_path
+        if self.gt_path:
+            check_file_exists(gt_path)
+            with open(gt_path) as json_file:
+                self.gt_data = json.load(json_file)
+        if result_json_path is None:
+            result_json_path = f'{output_path}/result.json'
+            
         predict_image = partial(self.infer_image,
                                 show_max_score_only=show_max_score_only, 
                                 show_class_label=show_class_label,
                                 show_keypoint_label=show_keypoint_label, 
                                 show_bbox=show_bbox, show_keypoints=show_keypoints, show_segmentation=show_segmentation,
                                 transparent_mask=transparent_mask, transparency_alpha=transparency_alpha,
-                                ignore_keypoint_idx=ignore_keypoint_idx)
+                                ignore_keypoint_idx=ignore_keypoint_idx,
+                                gt_path=gt_path)
         if input_type == "image":
-            output = predict_image(input_path)
+            if file_exists(input_path):
+                output = predict_image(input_path)
+            else:
+                raise Error
             if output_type == "show_image":
                 show_image(output)
             elif output_type == "write_image":
@@ -346,6 +377,7 @@ class D2Inferer:
             image_path_list = f.dir_files_path_list(dir_path=input_path)
             for image_path in tqdm(image_path_list):
                 output = predict_image(image_path)
+                # output = self.draw_gt(gt_path, gt_data, image_path, output)
                 if output_type == "show_image":
                     if show_image(output):
                         break
@@ -387,6 +419,20 @@ class D2Inferer:
             raise NotImplementedError
         else:
             raise Exception
+        with open(result_json_path, 'w') as outfile:
+            json.dump(self.pred_dataset, outfile, indent=4)
+
+    def draw_gt(self, image_path, output):
+        if self.gt_path:
+            for image in self.gt_data["images"]:
+                if image["coco_url"] == image_path:
+                    self.image_id = image["id"]
+            for ann in self.gt_data["annotations"]:
+                if ann["image_id"] == self.image_id:
+                    gt_bbox = BBox.from_list(bbox=ann["bbox"], input_format='pminsize')
+                    output = draw_bbox(img=output, bbox=gt_bbox,
+                        show_bbox=True, show_label=False, color=[0, 0, 255], thickness=2)
+        return output
 
 if __name__ == "__main__":
     
