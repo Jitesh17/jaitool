@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="jaitool",
-    version="0.0.5",
+    version="0.0.6",
     author="Jitesh Gosar",
     author_email="gosar95@gmail.com",
     description="Tools for AI related task",
