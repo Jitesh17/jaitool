@@ -155,7 +155,7 @@ class D2Trainer:
         self.model = model
         if "COCO-Detection" in self.model:
             self.model = self.model
-            train_type = 'box'
+            train_type = 'bbox'
         elif "COCO-Keypoints" in self.model:
             self.model = self.model
             train_type = 'kpt'
@@ -170,7 +170,7 @@ class D2Trainer:
             train_type = 'seg'
         elif "rpn" in model:
             self.model = "COCO-Detection/" + model
-            train_type = 'box'
+            train_type = 'bbox'
         elif "keypoint" in model:
             self.model = "COCO-Keypoints/" + model
             train_type = 'kpt'

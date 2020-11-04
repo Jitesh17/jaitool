@@ -267,14 +267,15 @@ class D2Inferer:
                                             keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
                                             ignore_kpt_idx=ignore_keypoint_idx)
                 xmin, ymin, xmax, ymax = bbox.to_int().to_list()
-                self.pred_dataset.append(
-                    {
-                        "image_id": self.image_id, 
-                        "category_id": self.class_names.index(pred_class), 
-                        "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format = 'pminsize'), 
-                        "score": score,
-                    }
-                )
+                if self.gt_path:
+                    self.pred_dataset.append(
+                        {
+                            "image_id": self.image_id, 
+                            "category_id": self.class_names.index(pred_class), 
+                            "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format = 'pminsize'), 
+                            "score": score,
+                        }
+                    )
         
         if show_max_score_only:
             for i, class_name in enumerate(self.class_names):
@@ -432,6 +433,7 @@ class D2Inferer:
                     gt_bbox = BBox.from_list(bbox=ann["bbox"], input_format='pminsize')
                     output = draw_bbox(img=output, bbox=gt_bbox,
                         show_bbox=True, show_label=False, color=[0, 0, 255], thickness=2)
+                # x()
         return output
 
 if __name__ == "__main__":
