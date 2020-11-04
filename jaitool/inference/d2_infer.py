@@ -26,6 +26,11 @@ from seaborn import color_palette
 from tqdm import tqdm
 
 
+def infinite_sequence():
+    num = 0
+    while True:
+        yield num
+        num += 1
 class D2Inferer:
     def __init__(
             self,
@@ -121,6 +126,7 @@ class D2Inferer:
             self.cfg.INPUT.MAX_SIZE_TEST = size_max
         self.predictor = DefaultPredictor(self.cfg)
         self.pred_dataset=[]
+        
 
     def get_outputs(self, img: np.ndarray) -> dict:
         ''''''
@@ -276,6 +282,16 @@ class D2Inferer:
                             "score": score,
                         }
                     )
+                else:
+                    
+                    self.pred_dataset.append(
+                        {
+                            "image_id": next(self.counter), 
+                            "category_id": self.class_names.index(pred_class), 
+                            "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format = 'pminsize'), 
+                            "score": score,
+                        }
+                    )
         
         if show_max_score_only:
             for i, class_name in enumerate(self.class_names):
@@ -325,7 +341,7 @@ class D2Inferer:
         ---
         The inference result of all data formats.
         """
-
+        self.counter = infinite_sequence()
         check_value(input_type,
                     check_from=["image", "image_list", "image_directory", "image_directories_list", "video",
                                 "video_list", "video_directory"])
@@ -375,7 +391,9 @@ class D2Inferer:
                 else:
                     raise Exception
         elif input_type == "image_directory":
-            image_path_list = f.dir_files_path_list(dir_path=input_path)
+            image_path_list = f.dir_contents_path_list_with_extension(
+                dirpath=input_path,
+                extension=[".png", ".jpg", ".jpeg"])
             for image_path in tqdm(image_path_list):
                 output = predict_image(image_path)
                 # output = self.draw_gt(gt_path, gt_data, image_path, output)
@@ -392,7 +410,9 @@ class D2Inferer:
                     raise Exception
         elif input_type == "image_directories_list":
             for image_directory in tqdm(input_path):
-                image_path_list = f.dir_files_path_list(dir_path=image_directory)
+                image_path_list = f.dir_contents_path_list_with_extension(
+                    dirpath=input_path,
+                    extension=[".png", ".jpg", ".jpeg"])
                 for image_path in tqdm(image_path_list):
                     output = predict_image(image_path)
                     if output_type == "show_image":
