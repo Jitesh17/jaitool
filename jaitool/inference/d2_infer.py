@@ -223,7 +223,7 @@ class D2Inferer:
         img = cv2.imread(image_path)
         output = img.copy()
         predict_dict = self.predict(img=img)
-        output = self.draw_gt(image_path, output)
+        output = self.draw_gt(image_path.split("/")[-1], output)
         printj.cyan(predict_dict)
         score_list = predict_dict['score_list']
         bbox_list = predict_dict['bbox_list']
@@ -443,10 +443,10 @@ class D2Inferer:
         with open(result_json_path, 'w') as outfile:
             json.dump(self.pred_dataset, outfile, indent=4)
 
-    def draw_gt(self, image_path, output):
+    def draw_gt(self, image_name, output):
         if self.gt_path:
             for image in self.gt_data["images"]:
-                if image["coco_url"] == image_path:
+                if image["file_name"] == image_name:
                     self.image_id = image["id"]
             for ann in self.gt_data["annotations"]:
                 if ann["image_id"] == self.image_id:
