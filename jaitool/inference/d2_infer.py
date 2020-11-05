@@ -273,21 +273,25 @@ class D2Inferer:
                                             keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
                                             ignore_kpt_idx=ignore_keypoint_idx)
                 xmin, ymin, xmax, ymax = bbox.to_int().to_list()
+                
+                cat_id = self.class_names.index(pred_class)
                 if self.gt_path:
+                    for category in self.gt_data["categories"]:
+                        if category["name"] == pred_class:
+                            cat_id = category["id"]
                     self.pred_dataset.append(
                         {
                             "image_id": self.image_id, 
-                            "category_id": self.class_names.index(pred_class), 
+                            "category_id": cat_id, 
                             "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format = 'pminsize'), 
                             "score": score,
                         }
                     )
                 else:
-                    
                     self.pred_dataset.append(
                         {
                             "image_id": next(self.counter), 
-                            "category_id": self.class_names.index(pred_class), 
+                            "category_id": cat_id, 
                             "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format = 'pminsize'), 
                             "score": score,
                         }
