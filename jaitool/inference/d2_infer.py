@@ -21,7 +21,7 @@ from pyjeasy.check_utils import check_value
 from pyjeasy.file_utils import (delete_dir, delete_dir_if_exists, dir_exists,
                                 dir_files_list, file_exists, make_dir,
                                 make_dir_if_not_exists)
-from pyjeasy.image_utils.output import show_image
+from pyjeasy.image_utils import show_image
 from seaborn import color_palette
 from tqdm import tqdm
 
@@ -224,7 +224,6 @@ class D2Inferer:
         output = img.copy()
         predict_dict = self.predict(img=img)
         output = self.draw_gt(image_path.split("/")[-1], output)
-        printj.cyan(predict_dict)
         score_list = predict_dict['score_list']
         bbox_list = predict_dict['bbox_list']
         pred_class_list = predict_dict['pred_class_list']
@@ -232,6 +231,7 @@ class D2Inferer:
         pred_keypoints_list = predict_dict['pred_keypoints_list']
         vis_keypoints_list = predict_dict['vis_keypoints_list']
         kpt_confidences_list = predict_dict['kpt_confidences_list']
+        # printj.cyan(predict_dict['bbox_list'])
         
         
         palette = np.array(color_palette(None, self.num_classes+1))*255
@@ -381,7 +381,7 @@ class D2Inferer:
             else:
                 raise Exception
         elif input_type == "image_list":
-            for image_path in tqdm(input_path):
+            for image_path in tqdm(input_path, colour='#66cc66'):
                 output = predict_image(image_path)
                 if output_type == "show_image":
                     if show_image(output):
@@ -398,7 +398,7 @@ class D2Inferer:
             image_path_list = f.dir_contents_path_list_with_extension(
                 dirpath=input_path,
                 extension=[".png", ".jpg", ".jpeg"])
-            for image_path in tqdm(image_path_list):
+            for image_path in tqdm(image_path_list, colour='#66cc66'):
                 output = predict_image(image_path)
                 # output = self.draw_gt(gt_path, gt_data, image_path, output)
                 if output_type == "show_image":
@@ -417,7 +417,7 @@ class D2Inferer:
                 image_path_list = f.dir_contents_path_list_with_extension(
                     dirpath=input_path,
                     extension=[".png", ".jpg", ".jpeg"])
-                for image_path in tqdm(image_path_list):
+                for image_path in tqdm(image_path_list, colour='#66cc66'):
                     output = predict_image(image_path)
                     if output_type == "show_image":
                         if show_image(output):

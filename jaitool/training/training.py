@@ -35,7 +35,7 @@ from pyjeasy.check_utils import check_value
 from pyjeasy.file_utils import (delete_dir, delete_dir_if_exists, dir_exists,
                                 dir_files_list, file_exists, make_dir,
                                 make_dir_if_not_exists)
-from pyjeasy.image_utils.output import show_image
+from pyjeasy.image_utils import show_image
 # from logger import logger
 from shapely.geometry import Polygon
 from tqdm import tqdm
