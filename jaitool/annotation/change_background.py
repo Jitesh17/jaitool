@@ -3,18 +3,22 @@ import random
 from datetime import datetime
 from sys import exit as x
 
+# from jaitool.annotation.COCO import COCO_Datase
+# from jaitool.annotation.NDDS import NDDS_Dataset
+# from logger import logger
 import albumentations as A
-from albumentations.augmentations.functional import rotate
 import cv2
 import numpy as np
 import printj
-from jaitool.annotation.COCO import COCO_Dataset
+from pyjeasy.image_utils.edit import get_all_colors
+from albumentations.augmentations.functional import rotate
+from annotation_utils.coco.structs import COCO_Dataset
+from annotation_utils.ndds.structs import NDDS_Dataset
+
+
 from pyjeasy.file_utils import (dir_contents_path_list_with_extension,
                                 make_dir_if_not_exists)
 from pyjeasy.image_utils.edit import resize_img
-# from annotation_utils.coco.structs import COCO_Category_Handler, COCO_Dataset
-# from annotation_utils.ndds.structs import NDDS_Dataset
-# from logger import logger
 from pyjeasy.image_utils.preview import show_image
 from tqdm import tqdm
 
@@ -26,6 +30,11 @@ def aug_flip_and_rotate(load_path=None):
             aug_seq = A.Compose([
                 A.Rotate(limit=(-90, 90), p=0.5),
                 A.Flip(p=0.5),
+                A.OpticalDistortion(
+                    distort_limit=0.05, shift_limit=0.05, 
+                    interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_REFLECT_101, 
+                    value=None, mask_value=None, always_apply=False, 
+                    p=0.5)
             ])
             return aug_seq
 
@@ -38,6 +47,13 @@ def image_sequence(image_path_list):
         else:
             num = 0
             random.shuffle(image_path_list)
+
+def create_mask_from_color(img, color):
+    color = list(reversed(color))
+    lower = np.array(color)-np.array([10]*3)  #, dtype="uint8")
+    upper = np.array(color)+np.array([10]*3)  #, dtype="uint8")
+    mask = cv2.inRange(img, lower, upper)
+    return mask
 
 def replace_bg_wrt_seg_ann(
     coco_data_dir: str, 
@@ -99,7 +115,71 @@ def replace_bg_wrt_mask(orig_image, background, mask):
     final = cv2.bitwise_or(fg, bg)
     return final
     
-
+def replace_bg_wrt_isimg(
+    ndds_data_dir: str, 
+    coco_data_dir: str, 
+    bg_dirs: list,
+    bg_iscolor: list=None,
+    output_img_dir_name: str="img_",
+    aug_on: bool=False,
+    aug_json: str=None,
+    show_preview: bool=False,
+    ): 
+    make_dir_if_not_exists(os.path.abspath(os.path.join(coco_data_dir, '../..')))
+    make_dir_if_not_exists(os.path.abspath(os.path.join(coco_data_dir, '..')))
+    make_dir_if_not_exists(coco_data_dir)
+    # Load NDDS Dataset
+    ndds_dataset = NDDS_Dataset.load_from_dir(
+        json_dir=ndds_data_dir,
+        show_pbar=True
+    )
+    image_path_list = []
+    for bg_dir in bg_dirs:
+        image_path_list += dir_contents_path_list_with_extension(
+            dirpath=bg_dir,
+            extension=['.jpg', '.jpeg', '.png'])
+    bg_gen = image_sequence(image_path_list)
+    pbar = tqdm(ndds_dataset.frames, colour='#44aa44')
+    bg_gen = image_sequence(image_path_list)
+    for image in pbar:
+        pbar.set_description("Changing background")
+        # pbar.set_postfix({'file_name': image.file_name})
+        is_path = image.img_path.split('.')[0]+'.is.'+image.img_path.split('.')[-1]
+        img = cv2.imread(image.img_path)
+        is_img = cv2.imread(is_path)
+        is_img2= is_img.copy()
+        # from PIL import Image
+        # img0 = Image.open(is_path)
+        # colors = img0.convert('RGB').getcolors()
+        # printj.red(colors)
+        if bg_iscolor:
+            mask = create_mask_from_color(is_img2, bg_iscolor)
+        else:
+            colors = get_all_colors(img_path=is_path)  # img.convert('RGB').getcolors()
+            _bg_iscolor = [list(colors[0][-1])]
+            printj.cyan(f"\nAll {len(colors)} colors in the image: {colors}")
+            printj.yellow(f'Background color is {_bg_iscolor}')
+            mask = create_mask_from_color(is_img2, _bg_iscolor)
+            
+        background = next(bg_gen)
+        if aug_on:
+            aug = aug_flip_and_rotate(aug_json)
+            background = aug(image=np.array(background))['image']
+        background = resize_img(src=background, size=(img.shape[1], img.shape[0]))
+        bg = cv2.bitwise_or(background, background, mask=mask)
+        mask = cv2.bitwise_not(mask)
+        fg = cv2.bitwise_or(img, img, mask=mask)
+        final = cv2.bitwise_or(fg, bg)
+        output = os.path.join(coco_data_dir, output_img_dir_name)
+        make_dir_if_not_exists(coco_data_dir)
+        make_dir_if_not_exists(output)
+        collaged_output = os.path.join(output,image.img_path.split('/')[-1])
+        if show_preview:
+            quit = show_image(final)
+            if quit:
+                break
+        else:
+            cv2.imwrite(collaged_output, final)
 
 if __name__ == "__main__":
     now = datetime.now()

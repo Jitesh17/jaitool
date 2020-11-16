@@ -13,6 +13,7 @@ from detectron2.utils.logger import log_every_n_seconds
 
 class LossEvalHook(HookBase):
     def __init__(self, eval_period, model, data_loader):
+        super().__init__()
         self._model = model
         self._period = eval_period
         self._data_loader = data_loader

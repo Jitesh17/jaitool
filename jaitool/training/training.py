@@ -168,7 +168,7 @@ class D2Trainer:
         elif "LVIS-InstanceSegmentation" in self.model:
             self.model = self.model
             train_type = 'seg'
-        elif "rpn" in model:
+        elif "rpn" in model or "fast" in model:
             self.model = "COCO-Detection/" + model
             train_type = 'bbox'
         elif "keypoint" in model:
@@ -241,6 +241,8 @@ class D2Trainer:
             make_dir_if_not_exists(self.cfg.OUTPUT_DIR)
         if "mask" or "segmentation" in self.model.lower():
             self.cfg.MODEL.MASK_ON = True
+        else:
+            self.cfg.MODEL.MASK_ON = False
         # self.cfg.MODEL.SEM_SEG_HEAD.LOSS_WEIGHT=0.5
         if size_min is not None:
             self.cfg.INPUT.MIN_SIZE_TEST = size_min

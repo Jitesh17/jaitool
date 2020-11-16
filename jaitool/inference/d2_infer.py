@@ -206,6 +206,7 @@ class D2Inferer:
     def infer_image(self, image_path: str,
                     show_max_score_only: bool = False,
                     show_class_label: bool = True,
+                    show_class_label_score_only: bool = False,
                     show_keypoint_label: bool = True,
                     show_bbox: bool = True,
                     show_keypoints: bool = True,
@@ -266,8 +267,13 @@ class D2Inferer:
                 if mask is not None and show_segmentation:
                     output = draw_mask_bool(img=output, mask_bool=mask, transparent=transparent_mask,
                                             alpha=transparency_alpha)
-                output = draw_bbox(img=output, bbox=bbox,
-                                show_bbox=show_bbox, show_label=show_class_label, text=f'{pred_class} {round(score, 2)}')
+                if show_class_label_score_only:
+                    output = draw_bbox(img=output, bbox=bbox,
+                                    show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
+                else:
+                    output = draw_bbox(img=output, bbox=bbox,
+                                    show_bbox=show_bbox, show_label=show_class_label, text=f'{pred_class} {round(score, 2)}')
+                
                 if keypoints is not None and show_keypoints:
                     output = draw_keypoints(img=output, keypoints=keypoints, show_keypoints=show_keypoints,
                                             keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
@@ -319,6 +325,7 @@ class D2Inferer:
               output_path: Union[str, List[str]],
               show_max_score_only: bool = False,
               show_class_label: bool = True,
+              show_class_label_score_only: bool = False,
               show_keypoint_label: bool = True,
               show_bbox: bool = True,
               show_keypoints: bool = True,
@@ -362,6 +369,7 @@ class D2Inferer:
         predict_image = partial(self.infer_image,
                                 show_max_score_only=show_max_score_only, 
                                 show_class_label=show_class_label,
+                                show_class_label_score_only=show_class_label_score_only,
                                 show_keypoint_label=show_keypoint_label, 
                                 show_bbox=show_bbox, show_keypoints=show_keypoints, show_segmentation=show_segmentation,
                                 transparent_mask=transparent_mask, transparency_alpha=transparency_alpha,
