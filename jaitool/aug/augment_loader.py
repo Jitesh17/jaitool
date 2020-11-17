@@ -52,7 +52,10 @@ def always(x): return iaa.Sometimes(1.0, x)
 
 class AugmentedLoader(DatasetMapper):
     def __init__(self, cfg, train_type: str = 'kpt', aug=None,
-                 vis_save_path: bool = None, show_aug_seg: bool = True):
+                 vis_save_path: bool = None, show_aug_seg: bool = True,
+                 aug_n_rows: int = 3, aug_n_cols: int = 5, 
+                 aug_save_dims: Tuple[int] = (3 * 500, 5 * 500),
+                 ):
         super().__init__(cfg)
         self.cfg = cfg
         self.train_type = train_type
@@ -61,6 +64,9 @@ class AugmentedLoader(DatasetMapper):
         self.show_aug_seg = show_aug_seg
         self.aug_visualizer = AugVisualizer(
             vis_save_path=self.vis_save_path,
+            n_rows = aug_n_rows, 
+            n_cols = aug_n_cols, 
+            save_dims = aug_save_dims,
             wait=None
         )
 
