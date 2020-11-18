@@ -505,6 +505,10 @@ class Segmentation:
         result_bbox = BBox(xmin=seg_bbox_xmin, ymin=seg_bbox_ymin, xmax=seg_bbox_xmax, ymax=seg_bbox_ymax).to_float()
         return result_bbox
 
+    def to_mask(self, width: int, height: int) -> list: 
+        mask = np.zeros((width, height), np.uint8)
+        contours = self.to_contour()
+        return cv2.drawContours(mask, contours, -1, (255,255,255),-1)
 #     def area(self) -> float:
 #         return sum([polygon.area() for polygon in self])
 #

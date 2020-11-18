@@ -1,6 +1,6 @@
 
 import copy
-from typing import List
+from typing import List, Tuple
 
 import imgaug as ia
 # import imgaug.augmenters as iaa
@@ -85,9 +85,17 @@ class AugmentedLoader(DatasetMapper):
 
         ann_dict = Detectron2_Annotation_Dict.from_dict(dataset_dict)
         bbox_list = [ann.bbox for ann in ann_dict.annotations]
-
+        # if train_type == 'seg':
+        #     printj.purple(len(ann_dict.annotations))
+        #     for ann in ann_dict.annotations:
+        #         seg = ann.segmentation
+        #     mask = seg.to_mask()
+        #     tranformed = self.aug(mask=mask)
+        #     mask = tranformed['mask']
+        #     image = tranformed['image']
+            
+        # else:
         image = self.aug(image=np.array(image))['image']
-
         seq_aug_for_no_seg = sometimes(iaa.Sequential(
             [
                 iaa.Rot90((1, 3), keep_size=False)

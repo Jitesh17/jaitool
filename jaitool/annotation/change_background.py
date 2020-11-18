@@ -119,6 +119,7 @@ def replace_bg_wrt_isimg(
     ndds_data_dir: str, 
     coco_data_dir: str, 
     bg_dirs: list,
+    json_filename: str=None, 
     bg_iscolor: list=None,
     output_img_dir_name: str="img_",
     aug_on: bool=False,
@@ -133,19 +134,25 @@ def replace_bg_wrt_isimg(
         json_dir=ndds_data_dir,
         show_pbar=True
     )
+    coco_dataset = COCO_Dataset.load_from_path(json_path=f"{coco_data_dir}/json/{json_filename}.json", check_paths=False)
+    
     image_path_list = []
     for bg_dir in bg_dirs:
         image_path_list += dir_contents_path_list_with_extension(
             dirpath=bg_dir,
             extension=['.jpg', '.jpeg', '.png'])
     bg_gen = image_sequence(image_path_list)
-    pbar = tqdm(ndds_dataset.frames, colour='#44aa44')
+    # pbar = tqdm(ndds_dataset.frames, colour='#44aa44')
+    pbar = tqdm(coco_dataset.images, colour='#44aa44')
     bg_gen = image_sequence(image_path_list)
     for image in pbar:
         pbar.set_description("Changing background")
         # pbar.set_postfix({'file_name': image.file_name})
-        is_path = image.img_path.split('.')[0]+'.is.'+image.img_path.split('.')[-1]
-        img = cv2.imread(image.img_path)
+        is_path = ndds_data_dir + '/' + image.file_name.split('.')[0]+'.is.'+image.file_name.split('.')[-1]
+        # img_path = ndds_data_dir + 
+        printj.green(image.coco_url)
+        printj.green(is_path)
+        img = cv2.imread(image.coco_url)
         is_img = cv2.imread(is_path)
         is_img2= is_img.copy()
         # from PIL import Image
@@ -173,7 +180,7 @@ def replace_bg_wrt_isimg(
         output = os.path.join(coco_data_dir, output_img_dir_name)
         make_dir_if_not_exists(coco_data_dir)
         make_dir_if_not_exists(output)
-        collaged_output = os.path.join(output,image.img_path.split('/')[-1])
+        collaged_output = os.path.join(output,image.file_name)
         if show_preview:
             quit = show_image(final)
             if quit:
@@ -184,8 +191,6 @@ def replace_bg_wrt_isimg(
 if __name__ == "__main__":
     now = datetime.now()
 
-    dt_string = now.strftime("%Y/%m/%d %H:%M:%S")
-    dt_string2 = now.strftime("%Y-%m-%d")
     dt_string3 = now.strftime("%Y_%m_%d_%H_%M_%S")
 
     key='bolt'

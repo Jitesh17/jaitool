@@ -87,6 +87,7 @@ class D2Trainer:
             val_on: bool=False,
             instance_test: str = "test_instance1",
             val_eval_period: int = 100,
+            train_type: str = None,
     ):
         """
         D2Trainer
@@ -177,6 +178,12 @@ class D2Trainer:
         elif "mask" in model:
             self.model = "COCO-InstanceSegmentation/" + model
             train_type = 'seg'
+        elif "Misc" in model:
+            self.model = model
+            train_type = 'seg'
+        elif train_type:
+            self.model = model
+            train_type = train_type
         else:
             printj.red.bold_on_black(f'{model} is not in the dictionary.\
                 Choose the correct model.')
