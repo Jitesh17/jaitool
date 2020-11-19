@@ -37,7 +37,7 @@ from .aug_visualizer import AugVisualizer
 # , aug_visualizer
 
 # aug_visualizer = AugVisualizer(
-#         vis_save_path="aug.png",
+#         aug_vis_save_path="aug.png",
 #         wait=None
 #     )
 
@@ -52,7 +52,7 @@ def always(x): return iaa.Sometimes(1.0, x)
 
 class AugmentedLoader(DatasetMapper):
     def __init__(self, cfg, train_type: str = 'kpt', aug=None,
-                 vis_save_path: bool = None, show_aug_seg: bool = True,
+                 aug_vis_save_path: bool = None, show_aug_seg: bool = True,
                  aug_n_rows: int = 3, aug_n_cols: int = 5, 
                  aug_save_dims: Tuple[int] = (3 * 500, 5 * 500),
                  ):
@@ -60,10 +60,10 @@ class AugmentedLoader(DatasetMapper):
         self.cfg = cfg
         self.train_type = train_type
         self.aug = aug
-        self.vis_save_path = vis_save_path
+        self.aug_vis_save_path = aug_vis_save_path
         self.show_aug_seg = show_aug_seg
         self.aug_visualizer = AugVisualizer(
-            vis_save_path=self.vis_save_path,
+            aug_vis_save_path=self.aug_vis_save_path,
             n_rows = aug_n_rows, 
             n_cols = aug_n_cols, 
             save_dims = aug_save_dims,
@@ -278,7 +278,7 @@ class AugmentedLoader(DatasetMapper):
             vis_img = draw_keypoints(img=vis_img, keypoints=kpts.to_numpy(
                 demarcation=True)[:, :2].tolist(), radius=6)
         # aug_visualizer = AugVisualizer(
-        #     vis_save_path=self.vis_save_path,
+        #     aug_vis_save_path=self.aug_vis_save_path,
         #     wait=None
         # )
         self.aug_visualizer.step(vis_img)

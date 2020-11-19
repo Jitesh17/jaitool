@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from detectron2.data import DatasetMapper, build_detection_test_loader
 from detectron2.engine.hooks import HookBase
-from detectron2.evaluation import inference_context
+from detectron2.evaluation import COCOEvaluator, inference_context
 from detectron2.utils.logger import log_every_n_seconds
 
 
@@ -72,3 +72,16 @@ class LossEvalHook(HookBase):
         if is_final or (self._period > 0 and next_iter % self._period == 0):
             self._do_loss_eval()
         self.trainer.storage.put_scalars(timetest=12)
+
+class CustomCOCOEvaluator(COCOEvaluator):
+    def __init__(self, dataset_name, cfg, distributed, output_dir=None):
+        super().__init__(dataset_name, cfg, distributed, output_dir)
+        self.dataset_name = dataset_name
+        self.gt_dataset = COCO_Dataset.load_from_path(
+            json_path=self._metadata.json_file,
+            img_dir=self._metadata.image_root
+        )
+        self._coco_results = cast(List[dict], None)
+        self.cfg = cfg
+        self.vis_output_dir = f'{self._output_dir}/visualization'
+    

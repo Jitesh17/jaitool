@@ -76,17 +76,19 @@ class D2Trainer:
             aug_on: bool=True,
             train_val: bool=False,
             aug_settings_file_path: str=None, 
-            vis_save_path: str='aug_vis.png', 
+            aug_vis_save_path: str='aug_vis.png', 
             show_aug_seg: bool=False, 
             device: str='cuda',
             num_workers: int=2, 
             images_per_batch: int=2, 
             base_lr: float=0.003, 
+            decrease_lr_by_ratio: float=0.1,
             lr_steps: tuple=(30000,),
             detectron2_dir_path: str = None,
             val_on: bool=False,
             instance_test: str = "test_instance1",
             val_eval_period: int = 100,
+            vis_period: int = 0,
             train_type: str = None,
     ):
         """
@@ -120,11 +122,13 @@ class D2Trainer:
         self.checkpoint_period = checkpoint_period
         self.score_thresh = score_thresh
         self.base_lr = base_lr
+        self.decrease_lr_by_ratio = decrease_lr_by_ratio
         self.lr_steps = lr_steps
         self.max_iter = max_iter
         self.val_on = val_on
         self.instance_test = instance_test
         self.val_eval_period = val_eval_period
+        self.vis_period = vis_period
         """ Load annotations json """
         with open(self.coco_ann_path) as json_file:
             self.coco_ann_data = json.load(json_file)
@@ -169,6 +173,9 @@ class D2Trainer:
         elif "LVIS-InstanceSegmentation" in self.model:
             self.model = self.model
             train_type = 'seg'
+        elif "Misc" in model:
+            self.model = model
+            train_type = 'seg'
         elif "rpn" in model or "fast" in model:
             self.model = "COCO-Detection/" + model
             train_type = 'bbox'
@@ -177,9 +184,6 @@ class D2Trainer:
             train_type = 'kpt'
         elif "mask" in model:
             self.model = "COCO-InstanceSegmentation/" + model
-            train_type = 'seg'
-        elif "Misc" in model:
-            self.model = model
             train_type = 'seg'
         elif train_type:
             self.model = model
@@ -231,11 +235,13 @@ class D2Trainer:
         self.cfg.SOLVER.IMS_PER_BATCH = self.images_per_batch
         self.cfg.SOLVER.BASE_LR = self.base_lr
         if self.lr_steps:
+            self.cfg.SOLVER.GAMMA = self.decrease_lr_by_ratio
             self.cfg.SOLVER.STEPS = self.lr_steps
         self.cfg.MODEL.DEVICE = self.device
-        self.cfg.SOLVER.MAX_ITER = max_iter
-        self.cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = batch_size_per_image
-        self.cfg.SOLVER.CHECKPOINT_PERIOD = checkpoint_period
+        self.cfg.SOLVER.MAX_ITER = self.max_iter
+        self.cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = self.batch_size_per_image
+        self.cfg.SOLVER.CHECKPOINT_PERIOD = self.checkpoint_period
+        self.cfg.VIS_PERIOD = self.vis_period
         if score_thresh:
             self.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = score_thresh
         self.cfg.OUTPUT_DIR = self.output_dir_path
@@ -260,7 +266,7 @@ class D2Trainer:
         self.aug_on=aug_on
         self.train_val=train_val
         self.train_type=train_type
-        self.vis_save_path=vis_save_path
+        self.aug_vis_save_path=aug_vis_save_path
         self.show_aug_seg=show_aug_seg
         
     def train(self):
@@ -271,7 +277,7 @@ class D2Trainer:
                 aug_on=self.aug_on, 
                 train_val=self.train_val,
                 train_type=self.train_type, 
-                vis_save_path=self.vis_save_path, 
+                aug_vis_save_path=self.aug_vis_save_path, 
                 show_aug_seg=self.show_aug_seg, 
                 val_on=self.val_on)
         else:
@@ -281,7 +287,7 @@ class D2Trainer:
                 aug_on=self.aug_on, 
                 train_val=self.train_val,
                 train_type=self.train_type, 
-                vis_save_path=self.vis_save_path, 
+                aug_vis_save_path=self.aug_vis_save_path, 
                 show_aug_seg=self.show_aug_seg, 
                 val_on=self.val_on)
         self.trainer.resume_or_load(resume=self.resume)
@@ -299,7 +305,7 @@ class Trainer(DefaultTrainer):
         aug_on: bool=True,
         train_val: bool=False,
         train_type: str='seg', 
-        vis_save_path: str='aug_vis.png', 
+        aug_vis_save_path: str='aug_vis.png', 
         show_aug_seg: bool=False, 
         val_on: bool=False):
         """
@@ -313,7 +319,7 @@ class Trainer(DefaultTrainer):
             aug_on=aug_on, 
             train_val=train_val,
             train_type=train_type, 
-            vis_save_path=vis_save_path, 
+            aug_vis_save_path=aug_vis_save_path, 
             show_aug_seg=show_aug_seg) 
         self._data_loader_iter = iter(self.data_loader)
         self.val_on = val_on
@@ -325,12 +331,12 @@ class Trainer(DefaultTrainer):
         aug_on: bool=True,
         train_val: bool=False,
         train_type: str='seg', 
-        vis_save_path: str='aug_vis.png', 
+        aug_vis_save_path: str='aug_vis.png', 
         show_aug_seg: bool=False):
         if aug_on:
             aug_seq = get_augmentation(load_path=aug_settings_file_path)
             aug_loader = AugmentedLoader(cfg=cfg, train_type=train_type, aug=aug_seq, 
-                                        vis_save_path=vis_save_path, show_aug_seg=show_aug_seg)
+                                        aug_vis_save_path=aug_vis_save_path, show_aug_seg=show_aug_seg)
             return build_detection_train_loader(cfg, mapper=aug_loader)
         else:
             return build_detection_train_loader(cfg, mapper=None)
@@ -343,7 +349,7 @@ class ValTrainer(DefaultTrainer):
         aug_on: bool=True,
         train_val: bool=False,
         train_type: str='seg', 
-        vis_save_path: str='aug_vis.png', 
+        aug_vis_save_path: str='aug_vis.png', 
         show_aug_seg: bool=False, 
         val_on: bool=False):
         """
@@ -357,7 +363,7 @@ class ValTrainer(DefaultTrainer):
             aug_on=aug_on, 
             train_val=train_val,
             train_type=train_type, 
-            vis_save_path=vis_save_path, 
+            aug_vis_save_path=aug_vis_save_path, 
             show_aug_seg=show_aug_seg) 
         self._data_loader_iter = iter(self.data_loader)
         self.val_on = val_on
@@ -369,12 +375,12 @@ class ValTrainer(DefaultTrainer):
         aug_on: bool=True,
         train_val: bool=False,
         train_type: str='seg', 
-        vis_save_path: str='aug_vis.png', 
+        aug_vis_save_path: str='aug_vis.png', 
         show_aug_seg: bool=False):
         if aug_on:
             aug_seq = get_augmentation(load_path=aug_settings_file_path)
             aug_loader = AugmentedLoader(cfg=cfg, train_type=train_type, aug=aug_seq, 
-                                        vis_save_path=vis_save_path, show_aug_seg=show_aug_seg)
+                                        aug_vis_save_path=aug_vis_save_path, show_aug_seg=show_aug_seg)
             return build_detection_train_loader(cfg, mapper=aug_loader)
         else:
             return build_detection_train_loader(cfg, mapper=None)
