@@ -1,4 +1,5 @@
 # from __future__ import annotations
+import os
 import json
 import timeit
 from datetime import datetime
@@ -24,6 +25,7 @@ from pyjeasy.file_utils import (delete_dir, delete_dir_if_exists, dir_exists,
 from pyjeasy.image_utils import show_image
 from seaborn import color_palette
 from tqdm import tqdm
+import pandas as pd
 
 
 def infinite_sequence():
@@ -60,6 +62,7 @@ class D2Inferer:
         key_seg_together: bool = False,
         detectron2_dir_path: str = "/home/jitesh/detectron/detectron2"
         """
+        self.df = pd.DataFrame(data=[],columns = [])
         if class_names is None:
             class_names = ['']
         if keypoint_names is None:
@@ -90,6 +93,9 @@ class D2Inferer:
             self.model = self.model
         elif "LVIS-InstanceSegmentation" in self.model:
             self.model = self.model
+        elif "Misc" in model:
+            self.model = model
+            # train_type = 'seg'
         elif "rpn" in model:
             self.model = "COCO-Detection/" + model
         elif "keypoint" in model:
@@ -121,8 +127,10 @@ class D2Inferer:
             self.cfg.MODEL.MASK_ON = True
         # self.cfg.MODEL.SEM_SEG_HEAD.LOSS_WEIGHT=0.5
         if size_min is not None:
+            self.cfg.INPUT.MIN_SIZE_TRAIN = size_min
             self.cfg.INPUT.MIN_SIZE_TEST = size_min
         if size_max is not None:
+            self.cfg.INPUT.MAX_SIZE_TRAIN = size_max
             self.cfg.INPUT.MAX_SIZE_TEST = size_max
         self.predictor = DefaultPredictor(self.cfg)
         self.pred_dataset=[]
@@ -293,6 +301,7 @@ class D2Inferer:
                             "score": score,
                         }
                     )
+                    
                 else:
                     self.pred_dataset.append(
                         {
@@ -454,18 +463,80 @@ class D2Inferer:
             raise Exception
         with open(result_json_path, 'w') as outfile:
             json.dump(self.pred_dataset, outfile, indent=4)
+        
+        if self.gt_path:
+            print(self.df)
+            self.df.to_excel(os.path.abspath(f'{result_json_path}/../test_data.xlsx')) # pip install openpyxl
+            # with open(f"{os.path.abspath(f'{result_json_path}/..')}/test_data.json", 'w') as outfile:
+            #     json.dump(self.df, outfile, indent=4)
+            # with open('names.csv', 'w', newline='') as csvfile:
+            #     # fieldnames = ['first_name', 'last_name']
+            #     writer = csv.DictWriter(csvfile, 
+            #                             # fieldnames=fieldnames
+            #                             )
+
 
     def draw_gt(self, image_name, output):
         if self.gt_path:
             for image in self.gt_data["images"]:
                 if image["file_name"] == image_name:
                     self.image_id = image["id"]
+                    row = {'img_name': image["file_name"], 
+                           'width': image["width"], 
+                           'height': image["height"],
+                        }
             for ann in self.gt_data["annotations"]:
                 if ann["image_id"] == self.image_id:
                     gt_bbox = BBox.from_list(bbox=ann["bbox"], input_format='pminsize')
                     output = draw_bbox(img=output, bbox=gt_bbox,
                         show_bbox=True, show_label=False, color=[0, 0, 255], thickness=2)
-                # x()
+                    row['bbox_width'] = ann["bbox"][2]
+                    row['bbox_height'] = ann["bbox"][3]
+                    row['bbox_area_default'] = ann["area"]
+                    row['bbox_area_s1500'] = ann["area"]*(1500*1500)/(row['width']*row['height'])
+                    row['bbox_area_s1024'] = ann["area"]*(1024*1024)/(row['width']*row['height'])
+                    row['bbox_area_s800'] = ann["area"]*(800*800)/(row['width']*row['height'])
+                    def seperate_sizes(seperate_type="default"):
+                        if row[f'bbox_area_{seperate_type}'] < 32**2:
+                            row[f'bbox_size_{seperate_type}'] = 0
+                            row[f'bbox_s_{seperate_type}'] = 1
+                            row[f'bbox_m_{seperate_type}'] = 0
+                            row[f'bbox_l_{seperate_type}'] = 0
+                        elif row[f'bbox_area_{seperate_type}'] < 96**2:
+                            row[f'bbox_size_{seperate_type}'] =1
+                            row[f'bbox_s_{seperate_type}'] = 0
+                            row[f'bbox_m_{seperate_type}'] = 1
+                            row[f'bbox_l_{seperate_type}'] = 0
+                        else:
+                            row[f'bbox_area_{seperate_type}'] =2
+                            row[f'bbox_s_{seperate_type}'] = 0
+                            row[f'bbox_m_{seperate_type}'] = 0
+                            row[f'bbox_l_{seperate_type}'] = 1
+                    seperate_sizes("default")
+                    seperate_sizes("s1500")
+                    seperate_sizes("s1024")
+                    seperate_sizes("s800")
+                    
+                    def check_size(width, height):
+                        if row['width'] == width and row['height'] == height:
+                            row[f'{width} x {height}'] = 1
+                        else:
+                            row[f'{width} x {height}'] = 0
+                            
+                        if row['width'] == height and row['height'] == width:
+                            row[f'{height} x {width}'] = 1
+                        else:
+                            row[f'{height} x {width}'] = 0
+                        
+                    check_size(2048, 1536)   
+                    check_size(1024, 768)   
+                    check_size(854, 640)    
+                    check_size(640, 480)   
+                        
+                    self.df = self.df.append(pd.DataFrame(row,
+                                                index =[self.image_id]
+                                                ) )
+                    
         return output
 
 if __name__ == "__main__":

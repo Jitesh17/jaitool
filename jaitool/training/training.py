@@ -66,11 +66,11 @@ class D2Trainer:
             keypoint_names: List[str] = None, num_keypoints: int = None,
             model: str = "mask_rcnn_R_50_FPN_1x",
             instance_train: str = "training_instance1",
-            size_min: int = 1024,
-            size_max: int = 1024,
+            size_min: int = None,
+            size_max: int = None,
             max_iter: int = 10000,
             batch_size_per_image: int = 512,
-            checkpoint_period: int = 100,
+            checkpoint_period: int = None,
             score_thresh: int = None,
             key_seg_together: bool = False,
             aug_on: bool=True,
@@ -234,17 +234,21 @@ class D2Trainer:
         self.cfg.DATALOADER.NUM_WORKERS = self.num_workers
         self.cfg.SOLVER.IMS_PER_BATCH = self.images_per_batch
         self.cfg.SOLVER.BASE_LR = self.base_lr
+        self.cfg.MODEL.DEVICE = self.device
+        self.cfg.OUTPUT_DIR = self.output_dir_path
         if self.lr_steps:
             self.cfg.SOLVER.GAMMA = self.decrease_lr_by_ratio
             self.cfg.SOLVER.STEPS = self.lr_steps
-        self.cfg.MODEL.DEVICE = self.device
-        self.cfg.SOLVER.MAX_ITER = self.max_iter
-        self.cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = self.batch_size_per_image
-        self.cfg.SOLVER.CHECKPOINT_PERIOD = self.checkpoint_period
-        self.cfg.VIS_PERIOD = self.vis_period
+        if self.max_iter:
+            self.cfg.SOLVER.MAX_ITER = self.max_iter
+        if self.batch_size_per_image:
+            self.cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = self.batch_size_per_image
+        if self.checkpoint_period:
+            self.cfg.SOLVER.CHECKPOINT_PERIOD = self.checkpoint_period
+        if self.vis_period:
+            self.cfg.VIS_PERIOD = self.vis_period
         if score_thresh:
             self.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = score_thresh
-        self.cfg.OUTPUT_DIR = self.output_dir_path
         if self.val_on:
             self.cfg.DATASETS.TEST = tuple([self.instance_test])
             self.cfg.TEST.EVAL_PERIOD = self.val_eval_period
@@ -258,8 +262,10 @@ class D2Trainer:
             self.cfg.MODEL.MASK_ON = False
         # self.cfg.MODEL.SEM_SEG_HEAD.LOSS_WEIGHT=0.5
         if size_min is not None:
+            self.cfg.INPUT.MIN_SIZE_TRAIN = size_min
             self.cfg.INPUT.MIN_SIZE_TEST = size_min
         if size_max is not None:
+            self.cfg.INPUT.MAX_SIZE_TRAIN = size_max
             self.cfg.INPUT.MAX_SIZE_TEST = size_max
         """ def train()  """
         self.aug_settings_file_path=aug_settings_file_path

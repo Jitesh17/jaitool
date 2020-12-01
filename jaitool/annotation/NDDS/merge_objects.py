@@ -3,6 +3,7 @@ from annotation_utils.ndds.structs import NDDS_Dataset
 
 from pyjeasy.image_utils.edit import merge_colors
 from typing import List, Tuple, Union
+from tqdm import tqdm
 
 def merge_objects_by_iscolor(
     ndds_path: str=None,
@@ -35,9 +36,10 @@ def merge_objects_by_iscolor(
         json_dir=ndds_path,
         show_pbar=True
     )
-
     # Fix NDDS Dataset naming so that it follows convention. (This is not necessary if the NDDS dataset already follows the naming convention.)
-    for frame in ndds_dataset.frames:
+    pbar = tqdm(ndds_dataset.frames, colour='#44aa44')
+    for frame in pbar:
+        pbar.set_description("Merging colors")
         is_path = frame.img_path.split('.')[0]+'.is.'+frame.img_path.split('.')[-1]
         if write_image:
             if write_image_path == None:

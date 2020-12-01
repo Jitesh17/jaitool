@@ -284,119 +284,113 @@ class AugmentedLoader(DatasetMapper):
         self.aug_visualizer.step(vis_img)
         # printj.red.bold_on_black("vis _______________________________________")
 
-    # def check_image_size(self, dataset_dict, image):
-    #     """
-    #     Raise an error if the image does not match the size specified in the dict.
-    #     """
-    #     if "width" in dataset_dict or "height" in dataset_dict:
-    #         image_wh = (image.shape[1], image.shape[0])
-    #         expected_wh = (dataset_dict["width"], dataset_dict["height"])
-    #         if not image_wh == expected_wh:
-    #             # raise SizeMismatchError(
-    #             #     "Mismatched (W,H){}, got {}, expect {}".format(
-    #             #         " for image " + dataset_dict["file_name"]
-    #             #         if "file_name" in dataset_dict
-    #             #         else "",
-    #             #         image_wh,
-    #             #         expected_wh,
-    #             #     )
-    #             # )
-    #             dataset_dict["width"] = image_wh[0]
-    #             dataset_dict["height"] = image_wh[1]
+    def check_image_size(self, dataset_dict, image):
+        """
+        Raise an error if the image does not match the size specified in the dict.
+        """
+        if "width" in dataset_dict or "height" in dataset_dict:
+            image_wh = (image.shape[1], image.shape[0])
+            expected_wh = (dataset_dict["width"], dataset_dict["height"])
+            if not image_wh == expected_wh:
+                # raise SizeMismatchError(
+                #     "Mismatched (W,H){}, got {}, expect {}".format(
+                #         " for image " + dataset_dict["file_name"]
+                #         if "file_name" in dataset_dict
+                #         else "",
+                #         image_wh,
+                #         expected_wh,
+                #     )
+                # )
+                dataset_dict["width"] = image_wh[0]
+                dataset_dict["height"] = image_wh[1]
 
-    #     # To ensure bbox always remap to original image size
-    #     if "width" not in dataset_dict:
-    #         dataset_dict["width"] = image.shape[1]
-    #     if "height" not in dataset_dict:
-    #         dataset_dict["height"] = image.shape[0]
+        # To ensure bbox always remap to original image size
+        if "width" not in dataset_dict:
+            dataset_dict["width"] = image.shape[1]
+        if "height" not in dataset_dict:
+            dataset_dict["height"] = image.shape[0]
 
-    # def det2_default_mapper(self, dataset_dict) -> dict:
-    #     """
-    #     Args:
-    #         dataset_dict (dict): Metadata of one image, in Detectron2 Dataset format.
+    def det2_default_mapper(self, dataset_dict) -> dict:
+        """
+        Args:
+            dataset_dict (dict): Metadata of one image, in Detectron2 Dataset format.
+        Returns:
+            dict: a format that builtin models in detectron2 accept
+        """
+        # USER: Write your own image loading if it's not from a file
+        if 'image' in dataset_dict:
+            image = dataset_dict["image"].cpu().numpy().transpose(1, 2, 0).astype('uint8')
+        else:
+            image = utils.read_image(dataset_dict["file_name"], format="BGR")
+        self.check_image_size(dataset_dict, image)
 
-    #     Returns:
-    #         dict: a format that builtin models in detectron2 accept
-    #     """
-    #     # USER: Write your own image loading if it's not from a file
-    #     image = dataset_dict["image"].cpu().numpy().transpose(1, 2, 0).astype('uint8')
-    #     self.check_image_size(dataset_dict, image)
+        # USER: Remove if you don't do semantic/panoptic segmentation.
+        if "sem_seg_file_name" in dataset_dict:
+            sem_seg_gt = utils.read_image(dataset_dict.pop("sem_seg_file_name"), "L").squeeze(2)
+        else:
+            sem_seg_gt = None
 
-    #     # USER: Remove if you don't do semantic/panoptic segmentation.
-    #     if "sem_seg_file_name" in dataset_dict:
-    #         sem_seg_gt = utils.read_image(dataset_dict.pop("sem_seg_file_name"), "L").squeeze(2)
-    #     else:
-    #         sem_seg_gt = None
+        aug_input = T.StandardAugInput(image, sem_seg=sem_seg_gt)
+        transforms = aug_input.apply_augmentations(self.augmentations)
+        image, sem_seg_gt = aug_input.image, aug_input.sem_seg
 
-    #     aug_input = T.StandardAugInput(image, sem_seg=sem_seg_gt)
-    #     transforms = aug_input.apply_augmentations(self.augmentations)
-    #     image, sem_seg_gt = aug_input.image, aug_input.sem_seg
+        image_shape = image.shape[:2]  # h, w
+        # Pytorch's dataloader is efficient on torch.Tensor due to shared-memory,
+        # but not efficient on large generic data structures due to the use of pickle & mp.Queue.
+        # Therefore it's important to use torch.Tensor.
+        dataset_dict["image"] = torch.as_tensor(np.ascontiguousarray(image.transpose(2, 0, 1)))
+        if sem_seg_gt is not None:
+            dataset_dict["sem_seg"] = torch.as_tensor(sem_seg_gt.astype("long"))
 
-    #     image_shape = image.shape[:2]  # h, w
-    #     # Pytorch's dataloader is efficient on torch.Tensor due to shared-memory,
-    #     # but not efficient on large generic data structures due to the use of pickle & mp.Queue.
-    #     # Therefore it's important to use torch.Tensor.
-    #     dataset_dict["image"] = torch.as_tensor(np.ascontiguousarray(image.transpose(2, 0, 1)))
-    #     if sem_seg_gt is not None:
-    #         dataset_dict["sem_seg"] = torch.as_tensor(sem_seg_gt.astype("long"))
+        # USER: Remove if you don't use pre-computed proposals.
+        # Most users would not need this feature.
+        if self.proposal_topk is not None:
+            utils.transform_proposals(
+                dataset_dict, image_shape, transforms, proposal_topk=self.proposal_topk
+            )
 
-    #     # USER: Remove if you don't use pre-computed proposals.
-    #     # Most users would not need this feature.
-    #     if self.proposal_topk is not None:
-    #         utils.transform_proposals(
-    #             dataset_dict, image_shape, transforms, proposal_topk=self.proposal_topk
-    #         )
+        if not self.is_train:
+            # USER: Modify this if you want to keep them for some reason.
+            dataset_dict.pop("annotations", None)
+            dataset_dict.pop("sem_seg_file_name", None)
+            return dataset_dict
 
-    #     if not self.is_train:
-    #         # USER: Modify this if you want to keep them for some reason.
-    #         dataset_dict.pop("annotations", None)
-    #         dataset_dict.pop("sem_seg_file_name", None)
-    #         return dataset_dict
+        if "annotations" in dataset_dict:
+            # USER: Modify this if you want to keep them for some reason.
+            for anno in dataset_dict["annotations"]:
+                if not self.use_instance_mask:
+                    anno.pop("segmentation", None)
+                if not self.use_keypoint:
+                    anno.pop("keypoints", None)
 
-    #     if "annotations" in dataset_dict:
-    #         # USER: Modify this if you want to keep them for some reason.
-    #         for anno in dataset_dict["annotations"]:
-    #             if not self.use_instance_mask:
-    #                 anno.pop("segmentation", None)
-    #             if not self.use_keypoint:
-    #                 anno.pop("keypoints", None)
+            # USER: Implement additional transformations if you have other types of data
+            annos = [
+                utils.transform_instance_annotations(
+                    obj, transforms, image_shape, keypoint_hflip_indices=self.keypoint_hflip_indices
+                )
+                for obj in dataset_dict.pop("annotations")
+                if obj.get("iscrowd", 0) == 0
+            ]
+            instances = utils.annotations_to_instances(
+                annos, image_shape, mask_format=self.instance_mask_format
+            )
 
-    #         # USER: Implement additional transformations if you have other types of data
-    #         annos = [
-    #             utils.transform_instance_annotations(
-    #                 obj, transforms, image_shape, keypoint_hflip_indices=self.keypoint_hflip_indices
-    #             )
-    #             for obj in dataset_dict.pop("annotations")
-    #             if obj.get("iscrowd", 0) == 0
-    #         ]
-    #         instances = utils.annotations_to_instances(
-    #             annos, image_shape, mask_format=self.instance_mask_format
-    #         )
-
-    #         # After transforms such as cropping are applied, the bounding box may no longer
-    #         # tightly bound the object. As an example, imagine a triangle object
-    #         # [(0,0), (2,0), (0,2)] cropped by a box [(1,0),(2,2)] (XYXY format). The tight
-    #         # bounding box of the cropped triangle should be [(1,0),(2,1)], which is not equal to
-    #         # the intersection of original bounding box and the cropping box.
-    #         if self.recompute_boxes:
-    #             instances.gt_boxes = instances.gt_masks.get_bounding_boxes()
-    #         dataset_dict["instances"] = utils.filter_empty_instances(instances)
-    #     return dataset_dict
+            # After transforms such as cropping are applied, the bounding box may no longer
+            # tightly bound the object. As an example, imagine a triangle object
+            # [(0,0), (2,0), (0,2)] cropped by a box [(1,0),(2,2)] (XYXY format). The tight
+            # bounding box of the cropped triangle should be [(1,0),(2,1)], which is not equal to
+            # the intersection of original bounding box and the cropping box.
+            if self.recompute_boxes:
+                instances.gt_boxes = instances.gt_masks.get_bounding_boxes()
+            dataset_dict["instances"] = utils.filter_empty_instances(instances)
+        return dataset_dict
 
     def __call__(self, dataset_dict) -> dict:
-        # Implement a mapper, similar to the default DatasetMapper, but with your own customizations
-        # it will be modified by code below
-        result = copy.deepcopy(dataset_dict)
+        
+        result = copy.deepcopy(dataset_dict)  
+        
+        result = self.mapper(result, train_type=self.train_type)
+        result = self.det2_default_mapper(result)
 
-        # result = self.mapper(result, train_type=self.train_type)
-        # result = self.det2_default_mapper(result)
-        if self.train_type == 'kpt':
-            result = self.kpt_dataset_mapper(result)
-        elif self.train_type == 'seg':
-            result = self.seg_dataset_mapper(result)
-        elif self.train_type == 'bbox':
-            result = self.bbox_dataset_mapper(result)
-        else:
-            raise Exception
         self.visualize_aug(result)
         return result

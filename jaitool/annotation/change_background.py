@@ -125,15 +125,16 @@ def replace_bg_wrt_isimg(
     aug_on: bool=False,
     aug_json: str=None,
     show_preview: bool=False,
+    verbose: bool=False,
     ): 
     make_dir_if_not_exists(os.path.abspath(os.path.join(coco_data_dir, '../..')))
     make_dir_if_not_exists(os.path.abspath(os.path.join(coco_data_dir, '..')))
     make_dir_if_not_exists(coco_data_dir)
     # Load NDDS Dataset
-    ndds_dataset = NDDS_Dataset.load_from_dir(
-        json_dir=ndds_data_dir,
-        show_pbar=True
-    )
+    # ndds_dataset = NDDS_Dataset.load_from_dir(
+    #     json_dir=ndds_data_dir,
+    #     show_pbar=True
+    # )
     coco_dataset = COCO_Dataset.load_from_path(json_path=f"{coco_data_dir}/json/{json_filename}.json", check_paths=False)
     
     image_path_list = []
@@ -143,15 +144,16 @@ def replace_bg_wrt_isimg(
             extension=['.jpg', '.jpeg', '.png'])
     bg_gen = image_sequence(image_path_list)
     # pbar = tqdm(ndds_dataset.frames, colour='#44aa44')
-    pbar = tqdm(coco_dataset.images, colour='#44aa44')
+    pbar = tqdm(coco_dataset.images, colour='#44aa44', total=len(coco_dataset.images))
     bg_gen = image_sequence(image_path_list)
     for image in pbar:
         pbar.set_description("Changing background")
         # pbar.set_postfix({'file_name': image.file_name})
         is_path = ndds_data_dir + '/' + image.file_name.split('.')[0]+'.is.'+image.file_name.split('.')[-1]
         # img_path = ndds_data_dir + 
-        printj.green(image.coco_url)
-        printj.green(is_path)
+        if verbose:
+            printj.green(image.coco_url)
+            printj.green(is_path)
         img = cv2.imread(image.coco_url)
         is_img = cv2.imread(is_path)
         is_img2= is_img.copy()
@@ -164,8 +166,9 @@ def replace_bg_wrt_isimg(
         else:
             colors = get_all_colors(img_path=is_path)  # img.convert('RGB').getcolors()
             _bg_iscolor = [list(colors[0][-1])]
-            printj.cyan(f"\nAll {len(colors)} colors in the image: {colors}")
-            printj.yellow(f'Background color is {_bg_iscolor}')
+            if verbose:
+                printj.cyan(f"\nAll {len(colors)} colors in the image: {colors}")
+                printj.yellow(f'Background color is {_bg_iscolor}')
             mask = create_mask_from_color(is_img2, _bg_iscolor)
             
         background = next(bg_gen)
@@ -173,6 +176,11 @@ def replace_bg_wrt_isimg(
             aug = aug_flip_and_rotate(aug_json)
             background = aug(image=np.array(background))['image']
         background = resize_img(src=background, size=(img.shape[1], img.shape[0]))
+        # while (img.shape[1] > background.shape[1]) and (img.shape[0] > background.shape[0]): 
+        #     background1 = cv2.hconcat([background, next(bg_gen)])
+        #     background2 = cv2.hconcat([next(bg_gen), next(bg_gen)])
+        #     background = cv2.vconcat([background1, background2])
+        # background = background[:img.shape[1], :img.shape[0]]
         bg = cv2.bitwise_or(background, background, mask=mask)
         mask = cv2.bitwise_not(mask)
         fg = cv2.bitwise_or(img, img, mask=mask)
