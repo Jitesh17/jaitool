@@ -478,6 +478,7 @@ class D2Inferer:
 
     def draw_gt(self, image_name, output):
         if self.gt_path:
+            row = dict()
             for image in self.gt_data["images"]:
                 if image["file_name"] == image_name:
                     self.image_id = image["id"]
