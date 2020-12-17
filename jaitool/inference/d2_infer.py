@@ -45,6 +45,8 @@ class D2Inferer:
             size_max: int = None,
             key_seg_together: bool = False,
             gray_on = False,
+            crop_mode: int=None,
+            crop_rec: Union[int, List[int]]=None,
             detectron2_dir_path: str = "/home/jitesh/detectron/detectron2"
     ):
         """
@@ -53,18 +55,24 @@ class D2Inferer:
 
         Parameters:
         ------
-        weights_path: str 
-        class_names: List[str] = None, num_classes: int = None,
-        keypoint_names: List[str] = None, num_keypoints: int = None,
-        model: str = "mask_rcnn_R_50_FPN_1x",
-        confidence_threshold: float = 0.5,
-        size_min: int = None,
-        size_max: int = None,
-        key_seg_together: bool = False,
-        detectron2_dir_path: str = "/home/jitesh/detectron/detectron2"
+        - weights_path: str 
+        - class_names: List[str] = None, num_classes: int = None,
+        - keypoint_names: List[str] = None, num_keypoints: int = None,
+        - model: str = "mask_rcnn_R_50_FPN_1x",
+        - confidence_threshold: float = 0.5,
+        - size_min: int = None,
+        - size_max: int = None,
+        - key_seg_together: bool = False,
+        - detectron2_dir_path: str = "/home/jitesh/detectron/detectron2"
+        
+        - crop_mode = 1 : crop between points (0, 0) and (a, a), where a is min(height, width)
+        - crop_mode = 2 : crop between points crop_rec[0] and crop_rec[1], crop_rec is defined by the user through parameter
+        - crop_rec : list of points of rectangle to crop
         """
         self.df = pd.DataFrame(data=[],columns = [])
         self.gray_on = gray_on
+        self.crop_mode = crop_mode
+        self.crop_rec = crop_rec
         if class_names is None:
             class_names = ['']
         if keypoint_names is None:
@@ -226,14 +234,8 @@ class D2Inferer:
                     transparency_alpha: float = 0.3,
                     ignore_keypoint_idx=None,
                     gt_path: str=None,
-                    crop_mode: int=None,
-                    crop_rec: Union[int, List[int]]=None,
                     ) -> np.ndarray:
-        '''Returns the Inference result of a single image.
-        
-        - crop_mode = 1 : crop between points (0, 0) and (a, a), where a is min(height, width)
-        - crop_mode = 2 : crop between points crop_rec[0] and crop_rec[1], crop_rec is defined by the user through parameter
-        - crop_rec : list of points of rectangle to crop'''
+        '''Returns the Inference result of a single image.'''
         # if gt_path:
         #     with open(gt_path) as json_file:
         #         gt_data = json.load(json_file)
@@ -241,13 +243,13 @@ class D2Inferer:
             ignore_keypoint_idx = []
         img = cv2.imread(image_path)
         # show_image(img)
-        if crop_mode == 1:
+        if self.crop_mode == 1:
             h, w, _ = img.shape
             a = min(h, w)
             img = img[0:a, 0:a]
             # img = img[1000:h, 1000:h]
-        if crop_mode == 2:
-            img = img[crop_rec[0], crop_rec[1]]
+        if self.crop_mode == 2:
+            img = img[self.crop_rec[0], self.crop_rec[1]]
             
         if self.gray_on:
             gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
