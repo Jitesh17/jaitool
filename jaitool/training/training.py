@@ -6,7 +6,7 @@ import random
 from datetime import datetime
 from functools import partial
 from sys import exit as x
-from typing import List, Union
+from typing import List, Tuple, Union
 
 import albumentations as A
 import cv2
@@ -19,12 +19,13 @@ import torch
 from detectron2 import model_zoo
 from detectron2.config import get_cfg
 from detectron2.data import (DatasetCatalog, DatasetMapper, MetadataCatalog,
-                             build_detection_train_loader, build_detection_test_loader)
+                             build_detection_test_loader,
+                             build_detection_train_loader)
 from detectron2.data import detection_utils as utils
 from detectron2.data import transforms as T
 from detectron2.data.datasets import register_coco_instances
-from detectron2.evaluation import COCOEvaluator
 from detectron2.engine import DefaultPredictor, DefaultTrainer
+from detectron2.evaluation import COCOEvaluator
 from jaitool.aug.augment import get_augmentation
 from jaitool.aug.augment_loader import AugmentedLoader
 from jaitool.draw import draw_bbox, draw_keypoints, draw_mask_bool
@@ -36,25 +37,9 @@ from pyjeasy.file_utils import (delete_dir, delete_dir_if_exists, dir_exists,
                                 dir_files_list, file_exists, make_dir,
                                 make_dir_if_not_exists)
 from pyjeasy.image_utils import show_image
-# from logger import logger
 from shapely.geometry import Polygon
 from tqdm import tqdm
 
-# from annotation_utils.coco.structs import COCO_Dataset
-# from annotation_utils.dataset.config.dataset_config /*/import (
-    # DatasetConfig, DatasetConfigCollection, DatasetConfigCollectionHandler)
-# from common_utils.common_types.bbox import BBox
-# from common_utils.common_types.keypoint import Keypoint2D, Keypoint2D_List
-# from common_utils.common_types.segmentation import Segmentation
-# from common_utils.cv_drawing_utils import (cv_simple_image_viewer, draw_bbox,
-                                        #    draw_keypoints, draw_segmentation)
-
-# from imageaug import AugHandler
-# from imageaug import Augmenter as aug
-# from pasonatron.detectron2.lib.roi_heads import (ROI_HEADS_REGISTRY,
-#                                                  CustomROIHeads)
-# from pasonatron.detectron2.lib.trainer import COCO_Keypoint_Trainer
-# from pasonatron.detectron2.util.augmentation.augmented_loader import mapper
 
 class D2Trainer:
     def __init__(
@@ -77,7 +62,10 @@ class D2Trainer:
             train_val: bool=False,
             aug_settings_file_path: str=None, 
             aug_vis_save_path: str='aug_vis.png', 
-            show_aug_seg: bool=False, 
+            show_aug_seg: bool=False,
+            aug_n_rows: int = 3, 
+            aug_n_cols: int = 5, 
+            aug_save_dims: Tuple[int] = (3 * 500, 5 * 500), 
             device: str='cuda',
             num_workers: int=2, 
             images_per_batch: int=2, 
@@ -256,7 +244,7 @@ class D2Trainer:
         if not self.resume:
             delete_dir_if_exists(self.cfg.OUTPUT_DIR)
             make_dir_if_not_exists(self.cfg.OUTPUT_DIR)
-        if "mask" or "segmentation" in self.model.lower():
+        if "mask" in self.model.lower() or "segmentation" in self.model.lower():
             self.cfg.MODEL.MASK_ON = True
         else:
             self.cfg.MODEL.MASK_ON = False
@@ -275,6 +263,10 @@ class D2Trainer:
         self.aug_vis_save_path=aug_vis_save_path
         self.show_aug_seg=show_aug_seg
         
+        self.aug_n_rows=aug_n_rows
+        self.aug_n_cols=aug_n_cols
+        self.aug_save_dims=aug_save_dims
+        
     def train(self):
         if self.val_on:
             self.trainer = ValTrainer(
@@ -285,7 +277,9 @@ class D2Trainer:
                 train_type=self.train_type, 
                 aug_vis_save_path=self.aug_vis_save_path, 
                 show_aug_seg=self.show_aug_seg, 
-                val_on=self.val_on)
+                val_on=self.val_on,
+                aug_n_rows=self.aug_n_rows, aug_n_cols=self.aug_n_cols, 
+                aug_save_dims=self.aug_save_dims,)
         else:
             self.trainer = Trainer(
                 cfg=self.cfg, 
@@ -357,7 +351,9 @@ class ValTrainer(DefaultTrainer):
         train_type: str='seg', 
         aug_vis_save_path: str='aug_vis.png', 
         show_aug_seg: bool=False, 
-        val_on: bool=False):
+        val_on: bool=False,
+        aug_n_rows: int = 3, aug_n_cols: int = 5, 
+        aug_save_dims: Tuple[int] = (3 * 500, 5 * 500),):
         """
         Args:
             cfg (CfgNode):
@@ -370,7 +366,9 @@ class ValTrainer(DefaultTrainer):
             train_val=train_val,
             train_type=train_type, 
             aug_vis_save_path=aug_vis_save_path, 
-            show_aug_seg=show_aug_seg) 
+            show_aug_seg=show_aug_seg,
+            aug_n_rows=aug_n_rows, aug_n_cols=aug_n_cols, 
+            aug_save_dims=aug_save_dims,) 
         self._data_loader_iter = iter(self.data_loader)
         self.val_on = val_on
         
@@ -382,11 +380,17 @@ class ValTrainer(DefaultTrainer):
         train_val: bool=False,
         train_type: str='seg', 
         aug_vis_save_path: str='aug_vis.png', 
-        show_aug_seg: bool=False):
+        show_aug_seg: bool=False,
+        aug_n_rows: int = 3, aug_n_cols: int = 5, 
+        aug_save_dims: Tuple[int] = (3 * 500, 5 * 500),
+        ):
         if aug_on:
             aug_seq = get_augmentation(load_path=aug_settings_file_path)
             aug_loader = AugmentedLoader(cfg=cfg, train_type=train_type, aug=aug_seq, 
-                                        aug_vis_save_path=aug_vis_save_path, show_aug_seg=show_aug_seg)
+                                        aug_vis_save_path=aug_vis_save_path, show_aug_seg=show_aug_seg,
+                                        aug_n_rows=aug_n_rows, aug_n_cols=aug_n_cols, 
+                                        aug_save_dims=aug_save_dims,
+                                        )
             return build_detection_train_loader(cfg, mapper=aug_loader)
         else:
             return build_detection_train_loader(cfg, mapper=None)

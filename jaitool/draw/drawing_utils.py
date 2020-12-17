@@ -21,7 +21,7 @@ def draw_bbox(
         label_orientation: str = 'top'
 ) -> np.ndarray:
     if color is None:
-        color = [0, 255, 255]
+        color = [50, 250, 50]
     result = img.copy()
     # print(type(bbox))
     if type(bbox) == BBox:

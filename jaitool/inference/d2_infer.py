@@ -44,6 +44,7 @@ class D2Inferer:
             size_min: int = None,
             size_max: int = None,
             key_seg_together: bool = False,
+            gray_on = False,
             detectron2_dir_path: str = "/home/jitesh/detectron/detectron2"
     ):
         """
@@ -63,6 +64,7 @@ class D2Inferer:
         detectron2_dir_path: str = "/home/jitesh/detectron/detectron2"
         """
         self.df = pd.DataFrame(data=[],columns = [])
+        self.gray_on = gray_on
         if class_names is None:
             class_names = ['']
         if keypoint_names is None:
@@ -123,7 +125,7 @@ class D2Inferer:
         self.cfg.MODEL.ROI_HEADS.NUM_CLASSES = self.num_classes
         self.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = self.confidence_threshold
         self.cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = self.num_keypoints
-        if "mask" or "segmentation" in self.model.lower():
+        if "mask" in self.model.lower() or "segmentation" in self.model.lower():
             self.cfg.MODEL.MASK_ON = True
         # self.cfg.MODEL.SEM_SEG_HEAD.LOSS_WEIGHT=0.5
         if size_min is not None:
@@ -174,7 +176,7 @@ class D2Inferer:
                      outputs['instances'].pred_boxes.tensor.cpu().numpy()]
         pred_class_list = [self.class_names[idx]
                            for idx in outputs['instances'].pred_classes.cpu().numpy()]
-        if "mask" or "segmentation" in self.model.lower():
+        if self.cfg.MODEL.MASK_ON:
             pred_masks_list = [mask
                                for mask in outputs['instances'].pred_masks.cpu().numpy()]
         else:
@@ -219,17 +221,37 @@ class D2Inferer:
                     show_bbox: bool = True,
                     show_keypoints: bool = True,
                     show_segmentation: bool = True,
+                    color_bbox: list = [50, 200, 50],
                     transparent_mask: bool = True,
                     transparency_alpha: float = 0.3,
                     ignore_keypoint_idx=None,
-                    gt_path: str=None,) -> np.ndarray:
-        '''Returns the Inference result of a single image.'''
+                    gt_path: str=None,
+                    crop_mode: int=None,
+                    crop_rec: Union[int, List[int]]=None,
+                    ) -> np.ndarray:
+        '''Returns the Inference result of a single image.
+        
+        - crop_mode = 1 : crop between points (0, 0) and (a, a), where a is min(height, width)
+        - crop_mode = 2 : crop between points crop_rec[0] and crop_rec[1], crop_rec is defined by the user through parameter
+        - crop_rec : list of points of rectangle to crop'''
         # if gt_path:
         #     with open(gt_path) as json_file:
         #         gt_data = json.load(json_file)
         if ignore_keypoint_idx is None:
             ignore_keypoint_idx = []
         img = cv2.imread(image_path)
+        # show_image(img)
+        if crop_mode == 1:
+            h, w, _ = img.shape
+            a = min(h, w)
+            img = img[0:a, 0:a]
+            # img = img[1000:h, 1000:h]
+        if crop_mode == 2:
+            img = img[crop_rec[0], crop_rec[1]]
+            
+        if self.gray_on:
+            gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
+            img = cv2.cvtColor(gray,cv2.COLOR_GRAY2RGB)
         output = img.copy()
         predict_dict = self.predict(img=img)
         output = self.draw_gt(image_path.split("/")[-1], output)
@@ -276,10 +298,10 @@ class D2Inferer:
                     output = draw_mask_bool(img=output, mask_bool=mask, transparent=transparent_mask,
                                             alpha=transparency_alpha)
                 if show_class_label_score_only:
-                    output = draw_bbox(img=output, bbox=bbox,
+                    output = draw_bbox(img=output, bbox=bbox, color=color_bbox,
                                     show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
                 else:
-                    output = draw_bbox(img=output, bbox=bbox,
+                    output = draw_bbox(img=output, bbox=bbox, color=color_bbox,
                                     show_bbox=show_bbox, show_label=show_class_label, text=f'{pred_class} {round(score, 2)}')
                 
                 if keypoints is not None and show_keypoints:
@@ -339,6 +361,7 @@ class D2Inferer:
               show_bbox: bool = True,
               show_keypoints: bool = True,
               show_segmentation: bool = True,
+              color_bbox: list = [50, 200, 50],
               transparent_mask: bool = True,
                     transparency_alpha: float = 0.3,
                     ignore_keypoint_idx=None,
@@ -373,7 +396,12 @@ class D2Inferer:
             with open(gt_path) as json_file:
                 self.gt_data = json.load(json_file)
         if result_json_path is None:
-            result_json_path = f'{output_path}/result.json'
+            if dir_exists(output_path):
+                result_json_path = f'{output_path}/result.json'
+            else:
+                _p = output_path.split('.')
+                _output_path = '.'.join(_p[:-1])
+                result_json_path = f'{_output_path}_result.json'
             
         predict_image = partial(self.infer_image,
                                 show_max_score_only=show_max_score_only, 
@@ -381,6 +409,7 @@ class D2Inferer:
                                 show_class_label_score_only=show_class_label_score_only,
                                 show_keypoint_label=show_keypoint_label, 
                                 show_bbox=show_bbox, show_keypoints=show_keypoints, show_segmentation=show_segmentation,
+                                color_bbox=color_bbox,
                                 transparent_mask=transparent_mask, transparency_alpha=transparency_alpha,
                                 ignore_keypoint_idx=ignore_keypoint_idx,
                                 gt_path=gt_path)
@@ -392,7 +421,7 @@ class D2Inferer:
             if output_type == "show_image":
                 show_image(output)
             elif output_type == "write_image":
-                cv2.imwrite(output_path, output)
+                cv2.imwrite(f'{output_path}', output)
             elif output_type == "write_video":
                 raise NotImplementedError
             else:
@@ -461,8 +490,11 @@ class D2Inferer:
             raise NotImplementedError
         else:
             raise Exception
-        with open(result_json_path, 'w') as outfile:
-            json.dump(self.pred_dataset, outfile, indent=4)
+        try:
+            with open(result_json_path, 'w') as outfile:
+                json.dump(self.pred_dataset, outfile, indent=4)
+        except NotADirectoryError:
+            printj.red(f'Not a directory: {result_json_path}')
         
         if self.gt_path:
             print(self.df)

@@ -3,9 +3,7 @@ import copy
 from typing import List, Tuple
 
 import imgaug as ia
-# import imgaug.augmenters as iaa
 import numpy as np
-# from logger import logger
 import printj
 import torch
 from detectron2.data import DatasetMapper
@@ -96,19 +94,21 @@ class AugmentedLoader(DatasetMapper):
             
         # else:
         image = self.aug(image=np.array(image))['image']
-        seq_aug_for_no_seg = sometimes(iaa.Sequential(
+        seq_aug_for_no_seg = almost_always(iaa.Sequential(
             [
-                iaa.Rot90((1, 3), keep_size=False)
+                iaa.Rot90(ia.ALL, keep_size=False)
             ]
         ))
         seq_aug_for_seg = sometimes(iaa.Sequential(
             [
+                iaa.Rot90(ia.ALL, keep_size=False),
                 iaa.Affine(
                     scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
                     translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)},
                     rotate=(-180, 180),
                     order=[0, 1],
-                    cval=(0, 255),
+                    # cval=(0, 255),
+                    cval=255,
                     mode=ia.ALL
                 )
             ]
