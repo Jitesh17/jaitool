@@ -249,7 +249,8 @@ class D2Inferer:
             img = img[0:a, 0:a]
             # img = img[1000:h, 1000:h]
         if self.crop_mode == 2:
-            img = img[self.crop_rec[0], self.crop_rec[1]]
+            p1, p2 = self.crop_rec
+            img = img[p1[1]:p2[1], p1[0]:p2[0]]
             
         if self.gray_on:
             gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
