@@ -1,5 +1,6 @@
 # from __future__ import annotations
 import os
+import sys
 import json
 import timeit
 from datetime import datetime
@@ -18,6 +19,7 @@ from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
 from jaitool.draw import draw_bbox, draw_keypoints, draw_mask_bool
 from jaitool.structures.bbox import BBox
+from jaitool.structures.point import Point2D
 from pyjeasy.check_utils import check_value
 from pyjeasy.file_utils import (delete_dir, delete_dir_if_exists, dir_exists,
                                 dir_files_list, file_exists, make_dir,
@@ -33,6 +35,8 @@ def infinite_sequence():
     while True:
         yield num
         num += 1
+
+
 class D2Inferer:
     def __init__(
             self,
@@ -44,9 +48,11 @@ class D2Inferer:
             size_min: int = None,
             size_max: int = None,
             key_seg_together: bool = False,
-            gray_on = False,
-            crop_mode: int=None,
-            crop_rec: Union[int, List[int]]=None,
+            gray_on=False,
+            crop_mode: int = None,
+            crop_mode2_rec: Union[int, List[int]] = None,
+            crop_mode3_sizes: Union[int, List[int]] = None,
+            crop_mode3_overlaps: Union[int, List[int]] = None,
             detectron2_dir_path: str = "/home/jitesh/detectron/detectron2"
     ):
         """
@@ -64,15 +70,17 @@ class D2Inferer:
         - size_max: int = None,
         - key_seg_together: bool = False,
         - detectron2_dir_path: str = "/home/jitesh/detectron/detectron2"
-        
+
         - crop_mode = 1 : crop between points (0, 0) and (a, a), where a is min(height, width)
         - crop_mode = 2 : crop between points crop_rec[0] and crop_rec[1], crop_rec is defined by the user through parameter
         - crop_rec : list of points of rectangle to crop
         """
-        self.df = pd.DataFrame(data=[],columns = [])
+        self.df = pd.DataFrame(data=[], columns=[])
         self.gray_on = gray_on
         self.crop_mode = crop_mode
-        self.crop_rec = crop_rec
+        self.crop_rec = crop_mode2_rec
+        self.crop_mode3_sizes = crop_mode3_sizes
+        self.crop_mode3_overlaps = crop_mode3_overlaps
         if class_names is None:
             class_names = ['']
         if keypoint_names is None:
@@ -143,8 +151,9 @@ class D2Inferer:
             self.cfg.INPUT.MAX_SIZE_TRAIN = size_max
             self.cfg.INPUT.MAX_SIZE_TEST = size_max
         self.predictor = DefaultPredictor(self.cfg)
-        self.pred_dataset=[]
-        
+        self.pred_dataset = []
+        self.palette = np.array(color_palette(
+            palette='Set2', n_colors=self.num_classes+1))*255
 
     def get_outputs(self, img: np.ndarray) -> dict:
         ''''''
@@ -153,21 +162,21 @@ class D2Inferer:
     def predict(self, img: np.ndarray) -> dict:
         """
         predict_dict = self.predict(img=img)
-        
+
         score_list = predict_dict['score_list']
-        
+
         bbox_list = predict_dict['bbox_list']
-        
+
         pred_class_list = predict_dict['pred_class_list']
-        
+
         pred_masks_list = predict_dict['pred_masks_list']
-        
+
         pred_keypoints_list = predict_dict['pred_keypoints_list']
-        
+
         vis_keypoints_list = predict_dict['vis_keypoints_list']
-        
+
         kpt_confidences_list = predict_dict['kpt_confidences_list']
-        
+
         for score, pred_class, bbox, mask, keypoints, vis_keypoints, kpt_confidences in zip(score_list,
                                                                                             pred_class_list,
                                                                                             bbox_list,
@@ -221,7 +230,69 @@ class D2Inferer:
             else:
                 make_dir(path)
 
-    def infer_image(self, image_path: str,
+    def chop_and_fix(
+        self,
+        img, 
+        c_sizes=[1024], 
+        c_overlaps=[100],
+        padding_color=[255, 255, 255],
+        ):
+        img_h, img_w, _c = img.shape
+        img = cv2.copyMakeBorder(
+            img, top=0, bottom=max(c_sizes), left=0, right=max(c_sizes), 
+            borderType=cv2.BORDER_CONSTANT, value=padding_color)
+        all_score_list = []
+        all_bbox_list = []
+        all_pred_class_list = []
+        all_pred_masks_list = []
+        all_pred_keypoints_list = []
+        all_vis_keypoints_list = []
+        all_kpt_confidences_list = []
+        for c_size, c_overlap in zip(c_sizes, c_overlaps):
+            i = 0
+            h = 0
+            while h < img_h:
+                sys.stdout.write(f"\rCreating image {i} if size {c_size}")
+                sys.stdout.flush()
+                w = 0
+                while w < img_w:
+                    c_img = img[h:h+c_size, w:w+c_size, :]
+                    predict_dict = self.predict(img=c_img)
+                    score_list = predict_dict['score_list']
+                    bbox_list = predict_dict['bbox_list']
+                    pred_class_list = predict_dict['pred_class_list']
+                    pred_masks_list = predict_dict['pred_masks_list']
+                    pred_keypoints_list = predict_dict['pred_keypoints_list']
+                    vis_keypoints_list = predict_dict['vis_keypoints_list']
+                    kpt_confidences_list = predict_dict['kpt_confidences_list']
+                    new_bbox_list = []
+                    for bbox in bbox_list:
+                        new_bbox_list.append(bbox + Point2D.from_list([w, h]))
+                    
+                    all_score_list += score_list
+                    all_bbox_list += new_bbox_list
+                    all_pred_class_list += pred_class_list
+                    all_pred_masks_list += pred_masks_list
+                    all_pred_keypoints_list += pred_keypoints_list
+                    all_vis_keypoints_list += vis_keypoints_list
+                    all_kpt_confidences_list += kpt_confidences_list
+                    # for bbox in bbox_list:
+                    # print(bbox_list)
+                    # if show_image(c_img, f"size: {c_size}, horizntal: {w}-{w+c_size}, vertical: {h}-{h+c_size}", 900):
+                    #     return
+                    # output = os.path.join(output_path, f't_{c_size}_{i}.jpg')
+                    # useful_img = lbm.create_cropped_labelme(
+                    #     c_point1=[w, h], 
+                    #     c_point2=[w+c_size, h+c_size], 
+                    #     output_img=f'{output}',
+                    #     theshold=theshold)
+                    i += 1
+                    w += c_size - c_overlap
+                h += c_size - c_overlap
+        return all_score_list, all_bbox_list, all_pred_class_list, all_pred_masks_list, all_pred_keypoints_list, all_vis_keypoints_list, all_kpt_confidences_list
+
+
+    def _infer_image(self, image_path: str,
                     show_max_score_only: bool = False,
                     show_class_label: bool = True,
                     show_class_label_score_only: bool = False,
@@ -229,52 +300,122 @@ class D2Inferer:
                     show_bbox: bool = True,
                     show_keypoints: bool = True,
                     show_segmentation: bool = True,
-                    color_bbox: list = [50, 200, 50],
+                    color_bbox: list = None,
                     transparent_mask: bool = True,
                     transparency_alpha: float = 0.3,
                     ignore_keypoint_idx=None,
-                    gt_path: str=None,
+                    # gt_path: str = None,
                     ) -> np.ndarray:
         '''Returns the Inference result of a single image.'''
-        # if gt_path:
-        #     with open(gt_path) as json_file:
-        #         gt_data = json.load(json_file)
-        if ignore_keypoint_idx is None:
-            ignore_keypoint_idx = []
-        img = cv2.imread(image_path)
-        # show_image(img)
+        _predict_image = partial(
+            self.infer_image,
+            image_path=image_path,
+            show_max_score_only=show_max_score_only,
+            show_class_label=show_class_label,
+            show_class_label_score_only=show_class_label_score_only,
+            show_keypoint_label=show_keypoint_label,
+            show_bbox=show_bbox, show_keypoints=show_keypoints, show_segmentation=show_segmentation,
+            color_bbox=color_bbox,
+            transparent_mask=transparent_mask, transparency_alpha=transparency_alpha,
+            ignore_keypoint_idx=ignore_keypoint_idx,
+            # gt_path=gt_path
+            )
+        _img = cv2.imread(image_path)
+        if self.gray_on:
+            gray = cv2.cvtColor(_img, cv2.COLOR_RGB2GRAY)
+            img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+        else:
+            img = _img
         if self.crop_mode == 1:
             h, w, _ = img.shape
             a = min(h, w)
             img = img[0:a, 0:a]
-            # img = img[1000:h, 1000:h]
-        if self.crop_mode == 2:
+            return _predict_image(img)
+        elif self.crop_mode == 2:
             p1, p2 = self.crop_rec
             img = img[p1[1]:p2[1], p1[0]:p2[0]]
-            
-        if self.gray_on:
-            gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
-            img = cv2.cvtColor(gray,cv2.COLOR_GRAY2RGB)
+            return _predict_image(img)
+        elif self.crop_mode == 3:
+            score_list, bbox_list, pred_class_list, \
+            pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list  \
+            = self.chop_and_fix(img, self.crop_mode3_sizes, self.crop_mode3_overlaps)
+            output = _img
+            output = self.draw_infer(show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list)
+            return output
+        
+        else:
+            return _predict_image(img)
+
+    def infer_image(self, 
+                    img: str=None,
+                    image_path: str=None,
+                    show_max_score_only: bool = False,
+                    show_class_label: bool = True,
+                    show_class_label_score_only: bool = False,
+                    show_keypoint_label: bool = True,
+                    show_bbox: bool = True,
+                    show_keypoints: bool = True,
+                    show_segmentation: bool = True,
+                    color_bbox: list = None,
+                    transparent_mask: bool = True,
+                    transparency_alpha: float = 0.3,
+                    ignore_keypoint_idx=None,
+                    # gt_path: str = None,
+                    ) -> np.ndarray:
+        '''Returns the Inference result of a single image.'''
+        if ignore_keypoint_idx is None:
+            ignore_keypoint_idx = []
+        # img = cv2.imread(image_path)
+        # # show_image(img)
+
+        # if self.gray_on:
+        #     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        #     img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+        # if self.crop_mode == 1:
+        #     h, w, _ = img.shape
+        #     a = min(h, w)
+        #     img = img[0:a, 0:a]
+        #     # img = img[1000:h, 1000:h]
+        # if self.crop_mode == 2:
+        #     p1, p2 = self.crop_rec
+        #     img = img[p1[1]:p2[1], p1[0]:p2[0]]
+        # if self.crop_mode == 3:
+        #     return
         output = img.copy()
         predict_dict = self.predict(img=img)
         output = self.draw_gt(image_path.split("/")[-1], output)
         score_list = predict_dict['score_list']
         bbox_list = predict_dict['bbox_list']
+        print(bbox_list)
         pred_class_list = predict_dict['pred_class_list']
         pred_masks_list = predict_dict['pred_masks_list']
         pred_keypoints_list = predict_dict['pred_keypoints_list']
         vis_keypoints_list = predict_dict['vis_keypoints_list']
         kpt_confidences_list = predict_dict['kpt_confidences_list']
         # printj.cyan(predict_dict['bbox_list'])
-        
-        
-        palette = np.array(color_palette(None, self.num_classes+1))*255
-        
+
+
+        output = self.draw_infer(show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list)
+
+        return output
+
+    def draw_infer(self, show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list):
         max_score_list = dict()
         max_score_pred_list = dict()
         if show_max_score_only:
             for i, class_name in enumerate(self.class_names):
                 max_score_list[class_name] = -1
+        # Setting color palletes/ class name legend on top left side of the imageif color_bbox is None:
+        if color_bbox is None:
+            for i, name in enumerate(self.class_names):
+                cv2.putText(
+                    img=output, text=name,
+                    # org=(5, 30 + 30*i), 
+                    # org=(5, 100 + 70*i), 
+                    org=(5, output.shape[0]-(100 + 70*i)), 
+                    fontFace=cv2.FONT_HERSHEY_COMPLEX,
+                    fontScale=2, color=self.palette[i],
+                    thickness=2, bottomLeftOrigin=False)
         for score, pred_class, bbox, mask, keypoints, vis_keypoints, kpt_confidences in zip(score_list,
                                                                                             pred_class_list,
                                                                                             bbox_list,
@@ -282,6 +423,11 @@ class D2Inferer:
                                                                                             pred_keypoints_list,
                                                                                             vis_keypoints_list,
                                                                                             kpt_confidences_list):
+            cat_id = self.class_names.index(pred_class)
+            if color_bbox:
+                _color_bbox = color_bbox
+            else:
+                _color_bbox = self.palette[cat_id]
             if show_max_score_only:
                 for i, class_name in enumerate(self.class_names):
                     if class_name == pred_class:
@@ -295,67 +441,68 @@ class D2Inferer:
                                 "keypoints": keypoints,
                                 "vis_keypoints": vis_keypoints,
                                 "kpt_confidences": kpt_confidences,
-                                }
+                            }
             else:
                 if mask is not None and show_segmentation:
                     output = draw_mask_bool(img=output, mask_bool=mask, transparent=transparent_mask,
                                             alpha=transparency_alpha)
                 if show_class_label_score_only:
-                    output = draw_bbox(img=output, bbox=bbox, color=color_bbox,
-                                    show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
+                    output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
+                                       show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
                 else:
-                    output = draw_bbox(img=output, bbox=bbox, color=color_bbox,
-                                    show_bbox=show_bbox, show_label=show_class_label, text=f'{pred_class} {round(score, 2)}')
-                
+                    output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
+                                       show_bbox=show_bbox, show_label=show_class_label, text=f'{pred_class}', label_orientation='right')
+                    output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
+                                       show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
                 if keypoints is not None and show_keypoints:
                     output = draw_keypoints(img=output, keypoints=keypoints, show_keypoints=show_keypoints,
                                             keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
                                             ignore_kpt_idx=ignore_keypoint_idx)
                 xmin, ymin, xmax, ymax = bbox.to_int().to_list()
-                
-                cat_id = self.class_names.index(pred_class)
                 if self.gt_path:
                     for category in self.gt_data["categories"]:
                         if category["name"] == pred_class:
                             cat_id = category["id"]
                     self.pred_dataset.append(
                         {
-                            "image_id": self.image_id, 
-                            "category_id": cat_id, 
-                            "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format = 'pminsize'), 
+                            "image_id": self.image_id,
+                            "category_id": cat_id,
+                            "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format='pminsize'),
                             "score": score,
                         }
                     )
-                    
                 else:
                     self.pred_dataset.append(
                         {
-                            "image_id": next(self.counter), 
-                            "category_id": cat_id, 
-                            "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format = 'pminsize'), 
+                            "image_id": next(self.counter),
+                            "category_id": cat_id,
+                            "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format='pminsize'),
                             "score": score,
                         }
                     )
-        
         if show_max_score_only:
             for i, class_name in enumerate(self.class_names):
+                cat_id = self.class_names.index(class_name)
+                if color_bbox:
+                    _color_bbox = color_bbox
+                else:
+                    _color_bbox = self.palette[cat_id]
                 if max_score_list[class_name] > 0:
                     max_pred = max_score_pred_list[class_name]
                     if max_pred["mask"] is not None and show_segmentation:
-                        output = draw_mask_bool(img=output, mask_bool=max_pred["mask"], color=palette[i+1], transparent=transparent_mask,
+                        output = draw_mask_bool(img=output, mask_bool=max_pred["mask"], color=_color_bbox, transparent=transparent_mask,
                                                 alpha=transparency_alpha)
                     output = draw_bbox(img=output, bbox=max_pred["bbox"],
-                                    show_bbox=show_bbox, show_label=show_class_label, text=f'{max_pred["pred_class"]} {round(max_pred["score"], 2)}')
-                    if keypoints is not None and show_keypoints:
+                                       show_bbox=show_bbox, show_label=show_class_label, text=f'{max_pred["pred_class"]} {round(max_pred["score"], 2)}')
+                    if max_pred["keypoints"] is not None and show_keypoints:
                         output = draw_keypoints(img=output, keypoints=max_pred["keypoints"], show_keypoints=show_keypoints,
                                                 keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
                                                 ignore_kpt_idx=ignore_keypoint_idx)
-                        
         return output
 
-    def infer(self, input_type: Union[str, int], 
+    def infer(self, input_type: Union[str, int],
               output_type: Union[str, int],
-              input_path: Union[str, List[str]], 
+              input_path: Union[str, List[str]],
               output_path: Union[str, List[str]],
               show_max_score_only: bool = False,
               show_class_label: bool = True,
@@ -364,25 +511,25 @@ class D2Inferer:
               show_bbox: bool = True,
               show_keypoints: bool = True,
               show_segmentation: bool = True,
-              color_bbox: list = [50, 200, 50],
+              color_bbox: list = None,
               transparent_mask: bool = True,
-                    transparency_alpha: float = 0.3,
-                    ignore_keypoint_idx=None,
+              transparency_alpha: float = 0.3,
+              ignore_keypoint_idx=None,
               gt_path: Union[str, List[str]] = None,
-              result_json_path: str= None):
+              result_json_path: str = None):
         """
-        
+
         Valid options for,
         === 
         input_type:
         --- 
         ["image", "image_list", "image_directory", "image_directories_list", "video",
         "video_list", "video_directory" ]
-        
+
         output_type: 
         ---
         ["show_image", "write_image", "write_video" ]
-        
+
         Returns
         ---
         The inference result of all data formats.
@@ -405,17 +552,18 @@ class D2Inferer:
                 _p = output_path.split('.')
                 _output_path = '.'.join(_p[:-1])
                 result_json_path = f'{_output_path}_result.json'
-            
-        predict_image = partial(self.infer_image,
-                                show_max_score_only=show_max_score_only, 
+
+        predict_image = partial(self._infer_image,
+                                show_max_score_only=show_max_score_only,
                                 show_class_label=show_class_label,
                                 show_class_label_score_only=show_class_label_score_only,
-                                show_keypoint_label=show_keypoint_label, 
+                                show_keypoint_label=show_keypoint_label,
                                 show_bbox=show_bbox, show_keypoints=show_keypoints, show_segmentation=show_segmentation,
                                 color_bbox=color_bbox,
                                 transparent_mask=transparent_mask, transparency_alpha=transparency_alpha,
                                 ignore_keypoint_idx=ignore_keypoint_idx,
-                                gt_path=gt_path)
+                                # gt_path=gt_path,
+                                )
         if input_type == "image":
             if file_exists(input_path):
                 output = predict_image(input_path)
@@ -498,18 +646,19 @@ class D2Inferer:
                 json.dump(self.pred_dataset, outfile, indent=4)
         except NotADirectoryError:
             printj.red(f'Not a directory: {result_json_path}')
-        
+
         if self.gt_path:
             print(self.df)
-            self.df.to_excel(os.path.abspath(f'{result_json_path}/../test_data.xlsx')) # pip install openpyxl
+            # pip install openpyxl
+            self.df.to_excel(os.path.abspath(
+                f'{result_json_path}/../test_data.xlsx'))
             # with open(f"{os.path.abspath(f'{result_json_path}/..')}/test_data.json", 'w') as outfile:
             #     json.dump(self.df, outfile, indent=4)
             # with open('names.csv', 'w', newline='') as csvfile:
             #     # fieldnames = ['first_name', 'last_name']
-            #     writer = csv.DictWriter(csvfile, 
+            #     writer = csv.DictWriter(csvfile,
             #                             # fieldnames=fieldnames
             #                             )
-
 
     def draw_gt(self, image_name, output):
         if self.gt_path:
@@ -517,21 +666,26 @@ class D2Inferer:
             for image in self.gt_data["images"]:
                 if image["file_name"] == image_name:
                     self.image_id = image["id"]
-                    row = {'img_name': image["file_name"], 
-                           'width': image["width"], 
+                    row = {'img_name': image["file_name"],
+                           'width': image["width"],
                            'height': image["height"],
-                        }
+                           }
             for ann in self.gt_data["annotations"]:
                 if ann["image_id"] == self.image_id:
-                    gt_bbox = BBox.from_list(bbox=ann["bbox"], input_format='pminsize')
+                    gt_bbox = BBox.from_list(
+                        bbox=ann["bbox"], input_format='pminsize')
                     output = draw_bbox(img=output, bbox=gt_bbox,
-                        show_bbox=True, show_label=False, color=[0, 0, 255], thickness=2)
+                                       show_bbox=True, show_label=False, color=[0, 0, 255], thickness=2)
                     row['bbox_width'] = ann["bbox"][2]
                     row['bbox_height'] = ann["bbox"][3]
                     row['bbox_area_default'] = ann["area"]
-                    row['bbox_area_s1500'] = ann["area"]*(1500*1500)/(row['width']*row['height'])
-                    row['bbox_area_s1024'] = ann["area"]*(1024*1024)/(row['width']*row['height'])
-                    row['bbox_area_s800'] = ann["area"]*(800*800)/(row['width']*row['height'])
+                    row['bbox_area_s1500'] = ann["area"] * \
+                        (1500*1500)/(row['width']*row['height'])
+                    row['bbox_area_s1024'] = ann["area"] * \
+                        (1024*1024)/(row['width']*row['height'])
+                    row['bbox_area_s800'] = ann["area"] * \
+                        (800*800)/(row['width']*row['height'])
+
                     def seperate_sizes(seperate_type="default"):
                         if row[f'bbox_area_{seperate_type}'] < 32**2:
                             row[f'bbox_size_{seperate_type}'] = 0
@@ -539,12 +693,12 @@ class D2Inferer:
                             row[f'bbox_m_{seperate_type}'] = 0
                             row[f'bbox_l_{seperate_type}'] = 0
                         elif row[f'bbox_area_{seperate_type}'] < 96**2:
-                            row[f'bbox_size_{seperate_type}'] =1
+                            row[f'bbox_size_{seperate_type}'] = 1
                             row[f'bbox_s_{seperate_type}'] = 0
                             row[f'bbox_m_{seperate_type}'] = 1
                             row[f'bbox_l_{seperate_type}'] = 0
                         else:
-                            row[f'bbox_area_{seperate_type}'] =2
+                            row[f'bbox_area_{seperate_type}'] = 2
                             row[f'bbox_s_{seperate_type}'] = 0
                             row[f'bbox_m_{seperate_type}'] = 0
                             row[f'bbox_l_{seperate_type}'] = 1
@@ -552,37 +706,37 @@ class D2Inferer:
                     seperate_sizes("s1500")
                     seperate_sizes("s1024")
                     seperate_sizes("s800")
-                    
+
                     def check_size(width, height):
                         if row['width'] == width and row['height'] == height:
                             row[f'{width} x {height}'] = 1
                         else:
                             row[f'{width} x {height}'] = 0
-                            
+
                         if row['width'] == height and row['height'] == width:
                             row[f'{height} x {width}'] = 1
                         else:
                             row[f'{height} x {width}'] = 0
-                        
-                    check_size(2048, 1536)   
-                    check_size(1024, 768)   
-                    check_size(854, 640)    
-                    check_size(640, 480)   
-                        
+
+                    check_size(2048, 1536)
+                    check_size(1024, 768)
+                    check_size(854, 640)
+                    check_size(640, 480)
+
                     self.df = self.df.append(pd.DataFrame(row,
-                                                index =[self.image_id]
-                                                ) )
-                    
+                                                          index=[self.image_id]
+                                                          ))
+
         return output
 
+
 if __name__ == "__main__":
-    
-    
+
     # palette = color_palette(None, 3)
     # # palette = [int(c*255) for color in palette for c in color]
-    # # palette = [int(c*255) for color in palette for c in color]
-    # printj.red(np.array(color_palette(None, 3))*255)
+    # palette = [[int(c*255) for c in color] for color in palette ]
     # printj.red(palette)
+    # printj.red(np.array(color_palette(None, 3))*255)
     # x()
     inferer_seg = D2Inferer(
         weights_path='/home/jitesh/3d/data/coco_data/ty1w_coco-data/weights/InstanceSegmentation_R_50_1x_aug_val_1/model_0019999.pth',
@@ -597,15 +751,15 @@ if __name__ == "__main__":
     infer_dump_dir = f'/home/jitesh/3d/blender/Learning/tropicana_yellow/infer_5k_{dt_string3}'
     delete_dir_if_exists(infer_dump_dir)
     make_dir_if_not_exists(infer_dump_dir)
-    
+
     dir_path = "/home/jitesh/Downloads/Photos (3)"
     # dir_path = "/home/jitesh/3d/blender/Learning/tropicana_yellow/img"
     # dir_path = "/home/jitesh/3d/data/coco_data/tropi1_coco-data/img"
-    inferer_seg.infer(input_type="image_directory", 
-              output_type="show_image",
-              input_path=dir_path, 
-              output_path=infer_dump_dir,
-              show_class_label=True,
-              show_max_score_only= True,
-              transparency_alpha=.9,
-              )
+    inferer_seg.infer(input_type="image_directory",
+                      output_type="show_image",
+                      input_path=dir_path,
+                      output_path=infer_dump_dir,
+                      show_class_label=True,
+                      show_max_score_only=True,
+                      transparency_alpha=.9,
+                      )

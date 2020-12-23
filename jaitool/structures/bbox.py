@@ -1,23 +1,32 @@
 from __future__ import annotations
-from numpy.ma import floor, ceil
+
+import printj
+from imgaug.augmentables.bbs import BoundingBox as ImgAugBBox
+# from imgaug.augmentables.bbs import BoundingBoxesOnImage as ImgAugBBoxes
+from numpy.ma import ceil, floor
 from pandas.conftest import cls
 
-from .point import Point2D  # , Point2D_List
 from .keypoint import Keypoint2D
-from imgaug.augmentables.bbs import BoundingBox as ImgAugBBox, BoundingBoxesOnImage as ImgAugBBoxes
-
-
+from .point import Point2D  # , Point2D_List
 
 
 class BBox:
     def __init__(self, xmin, ymin, xmax, ymax):
-        self.xmin = xmin
-        self.ymin = ymin
-        self.xmax = xmax
-        self.ymax = ymax
+        # self.xmin = xmin
+        # self.ymin = ymin
+        # self.xmax = xmax
+        # self.ymax = ymax
+        self.xmin = min(xmin, xmax)
+        self.ymin = min(ymin, ymax)
+        self.xmax = max(xmin, xmax)
+        self.ymax = max(ymin, ymax)
+        self.width = self.xmax - self.xmin
+        self.height = self.ymax - self.ymin
+        self.area = self.width*self.height
 
     def __str__(self):
-        class_string = str(type(self)).replace("<class '", "").replace("'>", "").split('.')[-1]
+        class_string = str(type(self)).replace(
+            "<class '", "").replace("'>", "").split('.')[-1]
         return f"{class_string}: (xmin, ymin, xmax, ymax)=({self.xmin}, {self.ymin}, {self.xmax}, {self.ymax})"
 
     def __repr__(self):
@@ -39,22 +48,33 @@ class BBox:
             return BBox(xmin=self.xmin + other.point.x, ymin=self.ymin + other.point.y, xmax=self.xmax + other.point.x,
                         ymax=self.ymax + other.point.y)
         else:
-            # logger.error(f'Cannot add {type(other)} to BBox')
+            # printj.red(f'Cannot add {type(other)} to BBox')
             raise TypeError
 
-    #
-    # def __sub__(self, other) -> BBox: if isinstance(other, BBox): raise NotImplementedError elif isinstance(other,
-    # (int, float)): return BBox(xmin=self.xmin-other, ymin=self.ymin-other, xmax=self.xmax-other,
-    # ymax=self.ymax-other) elif isinstance(other, Point2D): return BBox(xmin=self.xmin-other.x,
-    # ymin=self.ymin-other.y, xmax=self.xmax-other.x, ymax=self.ymax-other.y) elif isinstance(other, Keypoint2D):
-    # return BBox(xmin=self.xmin-other.point.x, ymin=self.ymin-other.point.y, xmax=self.xmax-other.point.x,
-    # ymax=self.ymax-other.point.y) else: logger.error(f'Cannot subtract {type(other)} from BBox') raise TypeError
-    #
+    def __sub__(self, other) -> BBox:
+        if isinstance(other, BBox):
+            return BBox(xmin=self.xmin-other.xmin,
+                        ymin=self.ymin-other.ymin,
+                        xmax=self.xmax-other.xmin,
+                        ymax=self.ymax-other.ymin)
+            # raise NotImplementedError
+        elif isinstance(other, (int, float)):
+            return BBox(xmin=self.xmin-other, ymin=self.ymin-other, xmax=self.xmax-other,
+                        ymax=self.ymax-other)
+        elif isinstance(other, Point2D):
+            return BBox(xmin=self.xmin-other.x, ymin=self.ymin-other.y, xmax=self.xmax-other.x, ymax=self.ymax-other.y)
+        elif isinstance(other, Keypoint2D):
+            return BBox(xmin=self.xmin-other.point.x, ymin=self.ymin-other.point.y, xmax=self.xmax-other.point.x,
+                        ymax=self.ymax-other.point.y)
+        else:
+            printj.red(f'Cannot subtract {type(other)} from BBox')
+            raise TypeError
+
     # def __mul__(self, other) -> BBox:
     #     if isinstance(other, (int, float)):
     #         return BBox(xmin=self.xmin*other, ymin=self.ymin*other, xmax=self.xmax*other, ymax=self.ymax*other)
     #     else:
-    #         logger.error(f'Cannot multiply {type(other)} with BBox')
+    #         printj.red(f'Cannot multiply {type(other)} with BBox')
     #         raise TypeError
     #
     #
@@ -62,7 +82,7 @@ class BBox:
     #     if isinstance(other, (int, float)):
     #         return BBox(xmin=self.xmin/other, ymin=self.ymin/other, xmax=self.xmax/other, ymax=self.ymax/other)
     #     else:
-    #         logger.error(f'Cannot divide {type(other)} from BBox')
+    #         printj.red(f'Cannot divide {type(other)} from BBox')
     #         raise TypeError
     #
     # def __eq__(self, other: BBox) -> bool: if isinstance(other, BBox): return self.xmin == other.xmin and self.ymin
@@ -121,12 +141,16 @@ class BBox:
         )
 
     def shape(self) -> list:
-        """
-        return [height, width]
-        """
-        width = self.xmax - self.xmin
-        height = self.ymax - self.ymin
-        return [height, width]
+        """return [height, width]"""
+        return [self.height, self.width]
+
+    # def height(self) -> list:
+    #     """return height"""
+    #     return self.ymax - self.ymin
+
+    # def width(self) -> list:
+    #     """return width"""
+    #     return self.xmax - self.xmin
 
     def to_list(self, output_format: str = 'pminpmax') -> list:
         """
@@ -138,8 +162,7 @@ class BBox:
         if output_format == 'pminpmax':
             return [self.xmin, self.ymin, self.xmax, self.ymax]
         elif output_format == 'pminsize':
-            bbox_h, bbox_w = self.shape()
-            return [self.xmin, self.ymin, bbox_w, bbox_h]
+            return [self.xmin, self.ymin, self.width, self.height]
         else:
             raise Exception
 
@@ -172,3 +195,27 @@ class BBox:
             xmax=imgaug_bbox.x2,
             ymax=imgaug_bbox.y2
         )
+
+    def is_inside_other_bbox(self, other: BBox) -> bool:
+        if other.xmin < self.xmin and self.xmax < other.xmax and other.ymin < self.ymin and self.ymax < other.ymax:
+            return True
+        else:
+            return False
+
+    def coord_in_cropped_frame(self, cropped_frame: BBox, theshold: float = 1) -> BBox:
+        result = BBox(xmin=self.xmin-cropped_frame.xmin,
+                      ymin=self.ymin-cropped_frame.ymin,
+                      xmax=self.xmax-cropped_frame.xmin,
+                      ymax=self.ymax-cropped_frame.ymin)
+        _thes_w = theshold*self.width
+        _thes_h = theshold*self.height
+        if self.xmax - _thes_w < cropped_frame.xmin \
+            or self.xmin + _thes_w > cropped_frame.xmax \
+                or self.ymax - _thes_h < cropped_frame.ymin \
+            or self.ymin + _thes_h > cropped_frame.ymax:
+            return BBox(0, 0, 0, 0)
+        result.xmin = max(0, result.xmin)
+        result.ymin = max(0, result.ymin)
+        result.xmax = min(cropped_frame.width, result.xmax)
+        result.ymax = min(cropped_frame.height, result.ymax)
+        return result.to_int()
