@@ -18,7 +18,7 @@ def draw_bbox(
         img: np.ndarray, bbox: BBox,
         color=None, thickness: int = 2, text: str = None, label_thickness: int = None,
         label_color: list = None, show_bbox: bool = True, show_label: bool = True,
-        label_orientation: str = 'top'
+        label_orientation: str = 'top', text_size: int = None
 ) -> np.ndarray:
     if color is None:
         color = [50, 250, 50]
@@ -33,18 +33,19 @@ def draw_bbox(
     else:
         raise TypeError
     if show_bbox:
-        cv2.rectangle(img=result, pt1=(xmin, ymin), pt2=(xmax, ymax), color=color, thickness=thickness)
+        cv2.rectangle(img=result, pt1=(xmin, ymin), pt2=(
+            xmax, ymax), color=color, thickness=thickness)
     if text is not None and show_label:
         text_thickness = label_thickness if label_thickness is not None else thickness
         text_color = label_color if label_color is not None else color
         result = draw_bbox_text(img=result, bbox=bbox, text=text, color=text_color, thickness=text_thickness,
-                                orientation=label_orientation)
+                                orientation=label_orientation, text_size=text_size)
     return result
 
 
 def draw_bbox_text(img: np.ndarray, bbox: BBox, text: str, color=None,
                    font_face: int = cv2.FONT_HERSHEY_COMPLEX, thickness: int = 2,
-                   orientation: str = 'top') -> np.ndarray:
+                   orientation: str = 'top', text_size: int = None) -> np.ndarray:
     # check_value(orientation, valid_value_list=['top', 'bottom', 'left', 'right'])
     if color is None:
         color = [0, 255, 255]
@@ -55,30 +56,52 @@ def draw_bbox_text(img: np.ndarray, bbox: BBox, text: str, color=None,
     [textbox_w, textbox_h], _ = cv2.getTextSize(text=text, fontFace=font_face, fontScale=font_scale,
                                                 thickness=thickness)
     orientation = orientation.lower()
-    if orientation in ['top', 'bottom']:
-        font_scale = font_scale * (target_textbox_w / textbox_w)
-        [textbox_w, textbox_h], _ = cv2.getTextSize(text=text, fontFace=font_face, fontScale=font_scale,
-                                                    thickness=thickness)
-        textbox_org_x = int(0.5 * (target_textbox_w - textbox_w) + bbox.xmin)
-        if orientation == 'top':
-            textbox_org_y = int(bbox.ymin - 0.2 * textbox_h)
-        elif orientation == 'bottom':
-            textbox_org_y = int(bbox.ymax + 1.2 * textbox_h)
-        else:
-            raise Exception
-    elif orientation in ['left', 'right']:
-        font_scale = font_scale * (target_textbox_h / textbox_h)
-        [textbox_w, textbox_h], _ = cv2.getTextSize(text=text, fontFace=font_face, fontScale=font_scale,
-                                                    thickness=thickness)
-        textbox_org_y = int(0.5 * (target_textbox_h + textbox_h) + bbox.ymin)
-        if orientation == 'left':
-            textbox_org_x = int(bbox.xmin - 1.2 * textbox_w)
-        elif orientation == 'right':
-            textbox_org_x = int(bbox.xmax + 0.2 * textbox_w)
-        else:
-            raise Exception
+    if text_size:
+        font_scale=text_size
+        if orientation in ['top', 'bottom']:
+            textbox_org_x = int(bbox.xmin)
+            if orientation == 'top':
+                textbox_org_y = int(bbox.ymin + text_size +1)
+            elif orientation == 'bottom':
+                textbox_org_y = int(bbox.ymax + 1)
+            else:
+                raise Exception
+        elif orientation in ['left', 'right']:
+            font_scale = font_scale * (target_textbox_h / textbox_h)
+            [textbox_w, textbox_h], _ = cv2.getTextSize(text=text, fontFace=font_face, fontScale=font_scale,
+                                                        thickness=thickness)
+            textbox_org_y = int(bbox.ymin)
+            if orientation == 'left':
+                textbox_org_x = int(bbox.xmin +len(text)*text_size)
+            elif orientation == 'right':
+                textbox_org_x = int(bbox.xmax + 1)
+            else:
+                raise Exception
     else:
-        raise Exception
+        if orientation in ['top', 'bottom']:
+            font_scale = font_scale * (target_textbox_w / textbox_w)
+            [textbox_w, textbox_h], _ = cv2.getTextSize(text=text, fontFace=font_face, fontScale=font_scale,
+                                                        thickness=thickness)
+            textbox_org_x = int(0.5 * (target_textbox_w - textbox_w) + bbox.xmin)
+            if orientation == 'top':
+                textbox_org_y = int(bbox.ymin - 0.2 * textbox_h)
+            elif orientation == 'bottom':
+                textbox_org_y = int(bbox.ymax + 1.2 * textbox_h)
+            else:
+                raise Exception
+        elif orientation in ['left', 'right']:
+            font_scale = font_scale * (target_textbox_h / textbox_h)
+            [textbox_w, textbox_h], _ = cv2.getTextSize(text=text, fontFace=font_face, fontScale=font_scale,
+                                                        thickness=thickness)
+            textbox_org_y = int(0.5 * (target_textbox_h + textbox_h) + bbox.ymin)
+            if orientation == 'left':
+                textbox_org_x = int(bbox.xmin - 1.2 * textbox_w)
+            elif orientation == 'right':
+                textbox_org_x = int(bbox.xmax + 0.2 * textbox_w)
+            else:
+                raise Exception
+        else:
+            raise Exception
     textbox_org = (textbox_org_x, textbox_org_y)
     cv2.putText(img=result, text=text, org=textbox_org, fontFace=font_face, fontScale=font_scale, color=color,
                 thickness=thickness, bottomLeftOrigin=False)
@@ -98,7 +121,8 @@ def draw_mask_image(img: np.ndarray, mask_image: np.ndarray, color=None, scale: 
     colored_mask = ((_mask_image.reshape(-1).reshape(1, -1).T * color)
                     .reshape(_mask_image.shape[0], _mask_image.shape[1], 3)) / scale
     colored_mask = colored_mask.astype('uint8')
-    cv2.addWeighted(src1=colored_mask, alpha=alpha, src2=result, beta=beta, gamma=gamma, dst=result)
+    cv2.addWeighted(src1=colored_mask, alpha=alpha, src2=result,
+                    beta=beta, gamma=gamma, dst=result)
     return result
 
 
@@ -136,12 +160,14 @@ def draw_mask_contour(
     if color is None:
         color = [255, 255, 0]
     result = img.copy()
-    contours=mask_bool.to_contour()
+    contours = mask_bool.to_contour()
     if not transparent:
-        result = cv2.drawContours(image=result, contours=contours, contourIdx=-1, color=color, thickness=-1)
+        result = cv2.drawContours(
+            image=result, contours=contours, contourIdx=-1, color=color, thickness=-1)
     else:
         mask_image = np.zeros(shape=result.shape[:2], dtype=np.uint8)
-        mask_image = cv2.drawContours(image=mask_image, contours=contours, contourIdx=-1, color=(255, 255, 255), thickness=-1)
+        mask_image = cv2.drawContours(
+            image=mask_image, contours=contours, contourIdx=-1, color=(255, 255, 255), thickness=-1)
         result = draw_mask_image(img=result, mask_image=mask_image, color=color, scale=255,
                                  alpha=alpha, beta=beta, gamma=gamma)
     return result
@@ -163,7 +189,8 @@ def draw_keypoints_labels(
     if len(keypoints_np) > 0:
         kpts_xmin, kpts_ymin = np.min(keypoints_np, axis=0)
         kpts_xmax, kpts_ymax = np.max(keypoints_np, axis=0)
-        kpts_bbox = BBox(xmin=kpts_xmin, ymin=kpts_ymin, xmax=kpts_xmax, ymax=kpts_ymax)
+        kpts_bbox = BBox(xmin=kpts_xmin, ymin=kpts_ymin,
+                         xmax=kpts_xmax, ymax=kpts_ymax)
         bbox_h, bbox_w = kpts_bbox.shape()
 
         # Define target_textbox_w and initial font_scale guess.
@@ -266,7 +293,8 @@ if __name__ == "__main__":
     im = blank_image
     gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     ret, thresh = cv2.threshold(gray, 127, 255, 0)
-    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours, hierarchy = cv2.findContours(
+        thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     mask = np.zeros(blank_image.shape, np.uint8)
     cv2.drawContours(mask, contours, -1, 255, 1)
     print(contours)

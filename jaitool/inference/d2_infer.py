@@ -1,7 +1,7 @@
 # from __future__ import annotations
+import json
 import os
 import sys
-import json
 import timeit
 from datetime import datetime
 from functools import partial
@@ -12,8 +12,8 @@ from typing import List, Union
 import cv2
 import jaitool.inference.d2_infer
 import numpy as np
+import pandas as pd
 import printj
-from pyjeasy.check_utils.check import check_file_exists  # pip install printj
 import pyjeasy.file_utils as f
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
@@ -21,13 +21,13 @@ from jaitool.draw import draw_bbox, draw_keypoints, draw_mask_bool
 from jaitool.structures.bbox import BBox
 from jaitool.structures.point import Point2D
 from pyjeasy.check_utils import check_value
+from pyjeasy.check_utils.check import check_file_exists  # pip install printj
 from pyjeasy.file_utils import (delete_dir, delete_dir_if_exists, dir_exists,
                                 dir_files_list, file_exists, make_dir,
                                 make_dir_if_not_exists)
 from pyjeasy.image_utils import show_image
 from seaborn import color_palette
 from tqdm import tqdm
-import pandas as pd
 
 
 def infinite_sequence():
@@ -267,7 +267,8 @@ class D2Inferer:
                     kpt_confidences_list = predict_dict['kpt_confidences_list']
                     new_bbox_list = []
                     for bbox in bbox_list:
-                        new_bbox_list.append(bbox + Point2D.from_list([w, h]))
+                        new_bbox = bbox + Point2D.from_list([w, h])
+                        new_bbox_list.append(new_bbox)
                     
                     all_score_list += score_list
                     all_bbox_list += new_bbox_list
@@ -339,7 +340,8 @@ class D2Inferer:
             score_list, bbox_list, pred_class_list, \
             pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list  \
             = self.chop_and_fix(img, self.crop_mode3_sizes, self.crop_mode3_overlaps)
-            output = _img
+            # output = _img
+            output = img
             output = self.draw_infer(show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list)
             return output
         
@@ -402,6 +404,7 @@ class D2Inferer:
     def draw_infer(self, show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list):
         max_score_list = dict()
         max_score_pred_list = dict()
+        img = output.copy()
         if show_max_score_only:
             for i, class_name in enumerate(self.class_names):
                 max_score_list[class_name] = -1
@@ -428,6 +431,36 @@ class D2Inferer:
                 _color_bbox = color_bbox
             else:
                 _color_bbox = self.palette[cat_id]
+            
+            _box = BBox(
+                # bbox.xmin, bbox.ymin, 
+                bbox.xmin-int(bbox.width/4), bbox.ymin-int(bbox.height/4), 
+                bbox.xmax+bbox.width, bbox.ymax+int(bbox.height*3/4))
+            printj.red(_box)
+            check_text_frame = img.copy()[_box.ymin:_box.ymax, _box.xmin:_box.xmax]
+            # check_text_frame = cv2.adaptiveThreshold(check_text_frame,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
+            # cv2.THRESH_BINARY,5,2)*3
+            # blur = cv2.GaussianBlur(check_text_frame,(5,5),0)
+            # ret3,th3 = cv2.threshold(blur,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            template_path = "/home/jitesh/prj/SekisuiProjects/test/gosar/tm/t.jpg"
+            cv2.imwrite(template_path, check_text_frame)
+            gray = cv2.cvtColor(check_text_frame, cv2.COLOR_BGR2GRAY)
+            # gray = cv2.medianBlur(gray, 3)
+            # gray = check_text_frame
+            config = ('-l eng --oem 1 --psm 3')
+            # # pytessercat
+            import pytesseract
+            text = pytesseract.image_to_string(gray, config=config)
+            boxes = pytesseract.image_to_boxes(gray, config=config)
+            print(boxes)
+            _text = text.split('\n')
+            print(_text)
+            _img = cv2.copyMakeBorder(check_text_frame, top=100, bottom=0, left=0, right=200, borderType=0)
+            cv2.putText(_img, text, (10, 30), fontFace= cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=[255, 255, 255], thickness=1, lineType=1)
+            
+            cv2.putText(_img, str(boxes), (10, 60), fontFace= cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=[255, 255, 255], thickness=1, lineType=1)
+            if show_image(_img):
+                return
             if show_max_score_only:
                 for i, class_name in enumerate(self.class_names):
                     if class_name == pred_class:

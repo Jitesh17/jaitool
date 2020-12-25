@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="jaitool",
-    version="0.1.5",
+    version="0.1.6",
     author="Jitesh Gosar",
     author_email="gosar95@gmail.com",
     description="Tools for AI related task",
@@ -33,7 +33,7 @@ setup(
         "torch",
         "torchvision",
         "pyyaml>=5.1",
-        "pycocotools>=2.0.1",
+        "pycocotools",
         "opencv-python",
         "numpy",
         "pandas",
