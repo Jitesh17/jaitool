@@ -388,7 +388,7 @@ class D2Inferer:
         output = self.draw_gt(image_path.split("/")[-1], output)
         score_list = predict_dict['score_list']
         bbox_list = predict_dict['bbox_list']
-        print(bbox_list)
+        # print(bbox_list)
         pred_class_list = predict_dict['pred_class_list']
         pred_masks_list = predict_dict['pred_masks_list']
         pred_keypoints_list = predict_dict['pred_keypoints_list']
@@ -431,36 +431,37 @@ class D2Inferer:
                 _color_bbox = color_bbox
             else:
                 _color_bbox = self.palette[cat_id]
+            """
+            # _box = BBox(
+            #     # bbox.xmin, bbox.ymin, 
+            #     bbox.xmin-int(bbox.width/4), bbox.ymin-int(bbox.height/4), 
+            #     bbox.xmax+bbox.width, bbox.ymax+int(bbox.height*3/4))
+            # printj.red(_box)
+            # check_text_frame = img.copy()[_box.ymin:_box.ymax, _box.xmin:_box.xmax]
+            # # check_text_frame = cv2.adaptiveThreshold(check_text_frame,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
+            # # cv2.THRESH_BINARY,5,2)*3
+            # # blur = cv2.GaussianBlur(check_text_frame,(5,5),0)
+            # # ret3,th3 = cv2.threshold(blur,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            # template_path = "/home/jitesh/prj/SekisuiProjects/test/gosar/tm/t.jpg"
+            # cv2.imwrite(template_path, check_text_frame)
+            # gray = cv2.cvtColor(check_text_frame, cv2.COLOR_BGR2GRAY)
+            # # gray = cv2.medianBlur(gray, 3)
+            # # gray = check_text_frame
+            # config = ('-l eng --oem 1 --psm 3')
+            # # # pytessercat
+            # import pytesseract
+            # text = pytesseract.image_to_string(gray, config=config)
+            # boxes = pytesseract.image_to_boxes(gray, config=config)
+            # print(boxes)
+            # _text = text.split('\n')
+            # print(_text)
+            # _img = cv2.copyMakeBorder(check_text_frame, top=100, bottom=0, left=0, right=200, borderType=0)
+            # cv2.putText(_img, text, (10, 30), fontFace= cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=[255, 255, 255], thickness=1, lineType=1)
             
-            _box = BBox(
-                # bbox.xmin, bbox.ymin, 
-                bbox.xmin-int(bbox.width/4), bbox.ymin-int(bbox.height/4), 
-                bbox.xmax+bbox.width, bbox.ymax+int(bbox.height*3/4))
-            printj.red(_box)
-            check_text_frame = img.copy()[_box.ymin:_box.ymax, _box.xmin:_box.xmax]
-            # check_text_frame = cv2.adaptiveThreshold(check_text_frame,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
-            # cv2.THRESH_BINARY,5,2)*3
-            # blur = cv2.GaussianBlur(check_text_frame,(5,5),0)
-            # ret3,th3 = cv2.threshold(blur,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-            template_path = "/home/jitesh/prj/SekisuiProjects/test/gosar/tm/t.jpg"
-            cv2.imwrite(template_path, check_text_frame)
-            gray = cv2.cvtColor(check_text_frame, cv2.COLOR_BGR2GRAY)
-            # gray = cv2.medianBlur(gray, 3)
-            # gray = check_text_frame
-            config = ('-l eng --oem 1 --psm 3')
-            # # pytessercat
-            import pytesseract
-            text = pytesseract.image_to_string(gray, config=config)
-            boxes = pytesseract.image_to_boxes(gray, config=config)
-            print(boxes)
-            _text = text.split('\n')
-            print(_text)
-            _img = cv2.copyMakeBorder(check_text_frame, top=100, bottom=0, left=0, right=200, borderType=0)
-            cv2.putText(_img, text, (10, 30), fontFace= cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=[255, 255, 255], thickness=1, lineType=1)
-            
-            cv2.putText(_img, str(boxes), (10, 60), fontFace= cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=[255, 255, 255], thickness=1, lineType=1)
-            if show_image(_img):
-                return
+            # cv2.putText(_img, str(boxes), (10, 60), fontFace= cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=[255, 255, 255], thickness=1, lineType=1)
+            # if show_image(_img):
+            #     return
+            """
             if show_max_score_only:
                 for i, class_name in enumerate(self.class_names):
                     if class_name == pred_class:
@@ -492,27 +493,28 @@ class D2Inferer:
                                             keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
                                             ignore_kpt_idx=ignore_keypoint_idx)
                 xmin, ymin, xmax, ymax = bbox.to_int().to_list()
+                pred_to_append = dict()
                 if self.gt_path:
                     for category in self.gt_data["categories"]:
                         if category["name"] == pred_class:
                             cat_id = category["id"]
-                    self.pred_dataset.append(
-                        {
-                            "image_id": self.image_id,
-                            "category_id": cat_id,
-                            "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format='pminsize'),
-                            "score": score,
-                        }
-                    )
+                    pred_to_append["image_id"] = self.image_id
+                    pred_to_append["category_id"] = cat_id
                 else:
-                    self.pred_dataset.append(
-                        {
-                            "image_id": next(self.counter),
-                            "category_id": cat_id,
-                            "bbox": BBox(xmin, ymin, xmax, ymax).to_list(output_format='pminsize'),
-                            "score": score,
-                        }
-                    )
+                    pred_to_append["image_id"] = next(self.counter)
+                    pred_to_append["category_id"] = cat_id
+                pred_to_append["bbox"] = BBox(xmin, ymin, xmax, ymax).to_list(output_format='pminsize')
+                _k = []
+                for keypoint in keypoints:
+                    printj.red(keypoint)
+                    x, y, c = keypoint
+                    _k.append(int(x))
+                    _k.append(int(y))
+                    _k.append(1)
+                pred_to_append["keypoints"] = _k
+                pred_to_append["score"] = score
+                self.pred_dataset.append(pred_to_append)
+                printj.red(keypoints)
         if show_max_score_only:
             for i, class_name in enumerate(self.class_names):
                 cat_id = self.class_names.index(class_name)

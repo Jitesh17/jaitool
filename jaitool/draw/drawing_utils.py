@@ -236,7 +236,7 @@ def draw_keypoints_labels(
 
 
 def draw_keypoints(
-        img: np.ndarray, keypoints: list, point_info_length: int = 2, show_keypoints: bool = True,
+        img: np.ndarray, keypoints: list, show_keypoints: bool = True,
         radius: int = 4, color=None,
         keypoint_labels: list = None, show_keypoints_labels: bool = False, label_thickness: int = 1,
         label_color: list = None,
@@ -248,6 +248,7 @@ def draw_keypoints(
         color = [0, 0, 255]
     result = img.copy()
     _keypoints = []
+    point_info_length = keypoints.shape[1]
     if point_info_length > 2:
         for e_list in keypoints:
             _keypoints.append(e_list[:2])
@@ -256,6 +257,7 @@ def draw_keypoints(
     else:
         error(f'"point_info_length" can not be 1')
     if show_keypoints:
+        
         for index, [x, y] in enumerate(_keypoints):
             if index not in ignore_kpt_idx:
                 cv2.circle(
