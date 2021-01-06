@@ -346,6 +346,7 @@ class D2Inferer:
             return output
         
         else:
+            printj.yellow('normal')
             return _predict_image(img)
 
     def infer_image(self, 
@@ -504,14 +505,15 @@ class D2Inferer:
                     pred_to_append["image_id"] = next(self.counter)
                     pred_to_append["category_id"] = cat_id
                 pred_to_append["bbox"] = BBox(xmin, ymin, xmax, ymax).to_list(output_format='pminsize')
-                _k = []
-                for keypoint in keypoints:
-                    printj.red(keypoint)
-                    x, y, c = keypoint
-                    _k.append(int(x))
-                    _k.append(int(y))
-                    _k.append(1)
-                pred_to_append["keypoints"] = _k
+                if keypoints:
+                    _k = []
+                    for keypoint in keypoints:
+                        printj.red(keypoint)
+                        x, y, c = keypoint
+                        _k.append(int(x))
+                        _k.append(int(y))
+                        _k.append(1)
+                    pred_to_append["keypoints"] = _k
                 pred_to_append["score"] = score
                 self.pred_dataset.append(pred_to_append)
                 printj.red(keypoints)
@@ -563,7 +565,7 @@ class D2Inferer:
 
         output_type: 
         ---
-        ["show_image", "write_image", "write_video" ]
+        ["return_summary", "show_image", "write_image", "write_video" ]
 
         Returns
         ---
@@ -604,7 +606,9 @@ class D2Inferer:
                 output = predict_image(input_path)
             else:
                 raise Error
-            if output_type == "show_image":
+            if output_type == "return_summary":
+                return self.pred_dataset
+            elif output_type == "show_image":
                 show_image(output)
             elif output_type == "write_image":
                 cv2.imwrite(f'{output_path}', output)

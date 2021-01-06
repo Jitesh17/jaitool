@@ -8,7 +8,7 @@ from pandas.conftest import cls
 
 from .keypoint import Keypoint2D
 from .point import Point2D  # , Point2D_List
-
+import numpy as np
 
 class BBox:
     def __init__(self, xmin, ymin, xmax, ymax):
@@ -23,6 +23,8 @@ class BBox:
         self.width = self.xmax - self.xmin
         self.height = self.ymax - self.ymin
         self.area = self.width*self.height
+        # self.center = ((self.ymax+self.ymin)//2, (self.xmax + self.xmin)//2)
+        self.center = (np.mean([self.xmin, self.xmax], dtype=np.int), np.mean([self.ymin, self.ymax], dtype=np.int))
 
     def __str__(self):
         class_string = str(type(self)).replace(
@@ -201,6 +203,12 @@ class BBox:
             return True
         else:
             return False
+
+    def pad(self, pad_left: int = 0, pad_right: int = 0, pad_top: int = 0, pad_bottom: int = 0, img_width: int = np.inf, img_height: int = np.inf) -> BBox:
+        return BBox(xmin = max(self.xmin - pad_left, 0),
+                      ymin = max(self.ymin - pad_top, 0),
+                      xmax = min(self.xmax + pad_right, img_width),
+                      ymax = min(self.ymax + pad_bottom, img_width))
 
     def coord_in_cropped_frame(self, cropped_frame: BBox, theshold: float = 1) -> BBox:
         result = BBox(xmin=self.xmin-cropped_frame.xmin,
