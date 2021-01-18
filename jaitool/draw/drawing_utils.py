@@ -16,9 +16,9 @@ from printj import red as error
 
 def draw_bbox(
         img: np.ndarray, bbox: BBox,
-        color=None, thickness: int = 2, text: str = None, label_thickness: int = None,
+        color=None, font_face=0,thickness: int = 2, text: str = None, label_thickness: int = 0,
         label_color: list = None, show_bbox: bool = True, show_label: bool = True,
-        label_orientation: str = 'top', text_size: int = None
+        label_orientation: str = 'top', text_size: int = 0
 ) -> np.ndarray:
     if color is None:
         color = [50, 250, 50]
@@ -38,7 +38,8 @@ def draw_bbox(
     if text is not None and show_label:
         text_thickness = label_thickness if label_thickness is not None else thickness
         text_color = label_color if label_color is not None else color
-        result = draw_bbox_text(img=result, bbox=bbox, text=text, color=text_color, thickness=text_thickness,
+        result = draw_bbox_text(img=result, bbox=bbox, text=text, color=text_color, font_face=font_face,
+                                thickness=text_thickness,
                                 orientation=label_orientation, text_size=text_size)
     return result
 

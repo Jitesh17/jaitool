@@ -130,6 +130,8 @@ class D2Trainer:
         if num_classes is None:
             self.num_classes = len(self.class_names)
         else:
+            printj.red(f'num_classes: {num_classes}')
+            printj.red(f'len(self.class_names): {len(self.class_names)}')
             assert num_classes == len(self.class_names)
             self.num_classes = num_classes
         if keypoint_names is None:

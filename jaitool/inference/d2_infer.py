@@ -409,7 +409,7 @@ class D2Inferer:
         if show_max_score_only:
             for i, class_name in enumerate(self.class_names):
                 max_score_list[class_name] = -1
-        # Setting color palletes/ class name legend on top left side of the imageif color_bbox is None:
+        # Setting color palletes/ class name legend on top left side of the image if color_bbox is None:
         if color_bbox is None:
             for i, name in enumerate(self.class_names):
                 cv2.putText(
