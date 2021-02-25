@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import copy
 import json
-import os
+import os, sys
 import random
 from datetime import datetime
 from functools import partial
@@ -51,8 +51,10 @@ class D2Trainer:
             keypoint_names: List[str] = None, num_keypoints: int = None,
             model: str = "mask_rcnn_R_50_FPN_1x",
             instance_train: str = "training_instance1",
-            size_min: int = None,
-            size_max: int = None,
+            min_size_train: int = None,
+            max_size_train: int = None,
+            min_size_test: int = None,
+            max_size_test: int = None,
             max_iter: int = 10000,
             batch_size_per_image: int = 512,
             checkpoint_period: int = None,
@@ -90,8 +92,8 @@ class D2Trainer:
         keypoint_names: List[str] = None, num_keypoints: int = None,
         model: str = "mask_rcnn_R_50_FPN_1x",
         confidence_threshold: float = 0.5,
-        size_min: int = None,
-        size_max: int = None,
+        min_size_train: int = None,
+        max_size_train: int = None,
         key_seg_together: bool = False,
         detectron2_dir_path: str = "/home/jitesh/detectron/detectron2"
         """
@@ -206,6 +208,7 @@ class D2Trainer:
             image_root=self.img_path
         )
         MetadataCatalog.get(self.instance_train).thing_classes = self.class_names
+        # sys.exit(self.class_names)
         if val_on:
             register_coco_instances(
                 name=self.instance_test,
@@ -251,12 +254,23 @@ class D2Trainer:
         else:
             self.cfg.MODEL.MASK_ON = False
         # self.cfg.MODEL.SEM_SEG_HEAD.LOSS_WEIGHT=0.5
-        if size_min is not None:
-            self.cfg.INPUT.MIN_SIZE_TRAIN = size_min
-            self.cfg.INPUT.MIN_SIZE_TEST = size_min
-        if size_max is not None:
-            self.cfg.INPUT.MAX_SIZE_TRAIN = size_max
-            self.cfg.INPUT.MAX_SIZE_TEST = size_max
+        # Train Size Parameters
+        if min_size_train is not None:
+            self.cfg.INPUT.MIN_SIZE_TRAIN = min_size_train
+        if max_size_train is not None:
+            self.cfg.INPUT.MAX_SIZE_TRAIN = max_size_train
+        # Test Size Parameters
+        if min_size_test is not None:
+            self.cfg.INPUT.MIN_SIZE_TEST = min_size_test
+        elif min_size_train is not None:
+            self.cfg.INPUT.MIN_SIZE_TEST = min_size_train
+        if max_size_test is not None:
+            self.cfg.INPUT.MAX_SIZE_TEST = max_size_test
+        elif max_size_train is not None:
+            self.cfg.INPUT.MAX_SIZE_TEST = max_size_train
+            
+            
+            self.cfg.INPUT.MIN_SIZE_TEST = min_size_train
         """ def train()  """
         self.aug_settings_file_path=aug_settings_file_path
         self.aug_on=aug_on
@@ -524,8 +538,8 @@ def main():
             #   checkpoint_period=100,
             #   batch_size_per_image=512,
             #   num_classes=1,
-            #   size_max=1024,
-            #   size_min=1024,
+            #   max_size_train=1024,
+            #   min_size_train=1024,
             #   aug_on=True,
               detectron2_dir_path="/home/jitesh/prj/detectron2")
     d2.train()

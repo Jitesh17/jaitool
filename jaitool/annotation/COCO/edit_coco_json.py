@@ -3,8 +3,8 @@ import os
 import cv2
 import numpy as np
 # import printj
-from annotation_utils.coco.structs import COCO_Dataset
-from common_utils.common_types.segmentation import Segmentation
+# from annotation_utils.coco.structs import COCO_Dataset
+# from common_utils.common_types.segmentation import Segmentation
 from tqdm import tqdm
 
 

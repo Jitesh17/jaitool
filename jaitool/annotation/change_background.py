@@ -12,8 +12,8 @@ import cv2
 import numpy as np
 import printj
 from albumentations.augmentations.functional import rotate
-from annotation_utils.coco.structs import COCO_Dataset
-from annotation_utils.ndds.structs import NDDS_Dataset
+# from annotation_utils.coco.structs import COCO_Dataset
+# from annotation_utils.ndds.structs import NDDS_Dataset
 from pyjeasy.file_utils import (dir_contents_path_list_with_extension,
                                 make_dir_if_not_exists)
 from pyjeasy.image_utils.edit import get_all_colors, resize_img

@@ -29,8 +29,8 @@ def filter_annotations(annotations, images):
     return funcy.lfilter(lambda a: int(a['image_id']) in image_ids, annotations)
 
 
-def split_coco(a_annotations, a_train, a_test, a_split, a_having_annotations: bool = True):
-    with open(a_annotations, 'rt', encoding='UTF-8') as annotations:
+def split_coco(input_json, json_split_1, json_split_2, split_ratio=0.9, having_annotations: bool = True):
+    with open(input_json, 'rt', encoding='UTF-8') as annotations:
         coco = json.load(annotations)
         info = coco['info']
         licenses = coco['licenses']
@@ -40,31 +40,31 @@ def split_coco(a_annotations, a_train, a_test, a_split, a_having_annotations: bo
 
         number_of_images = len(images)
 
-        images_with_annotations = funcy.lmap(
-            lambda a: int(a['image_id']), annotations)
+        # images_with_annotations = funcy.lmap(
+        #     lambda a: int(a['image_id']), annotations)
 
-        if a_having_annotations:
-            images = funcy.lremove(
-                lambda i: i['id'] not in images_with_annotations, images)
+        # if having_annotations:
+        #     images = funcy.lremove(
+        #         lambda i: i['id'] not in images_with_annotations, images)
 
-        x, y = train_test_split(images, train_size=a_split)
+        x, y = train_test_split(images, train_size=split_ratio)
 
-        save_coco(a_train, info, licenses, x,
+        save_coco(json_split_1, info, licenses, x,
                   filter_annotations(annotations, x), categories)
-        save_coco(a_test, info, licenses, y,
+        save_coco(json_split_2, info, licenses, y,
                   filter_annotations(annotations, y), categories)
 
         print("Saved {} entries in {} and {} in {}".format(
-            len(x), a_train, len(y), a_test))
+            len(x), json_split_1, len(y), json_split_2))
 
 
-def main(path, a_split=0.9, key='hook_train'):
-    a_annotations = f"{path}/json/{key}.json"
-    a_train = f"{path}/json/{key}_train.json"
-    a_test = f"{path}/json/{key}_test.json"
-    # a_split = 0.9
-    a_having_annotations = True
-    split_coco(a_annotations, a_train, a_test, a_split, a_having_annotations)
+def main(path, split_ratio=0.9, key='hook_train'):
+    input_json = f"{path}/json/{key}.json"
+    json_split_1 = f"{path}/json/{key}_train.json"
+    json_split_2 = f"{path}/json/{key}_test.json"
+    # split_ratio = 0.9
+    having_annotations = True
+    split_coco(input_json, json_split_1, json_split_2, split_ratio, having_annotations)
     # main(args)
     # python split_coco.py
 
@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
     for path in paths:
         main(path,
-             a_split=0.99,
+             split_ratio=0.99,
              #  key='hook_mask')
              key='coco')
         #  key='cropped_hook_0.1')

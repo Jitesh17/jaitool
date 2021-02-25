@@ -73,6 +73,7 @@ class D2Inferer:
 
         - crop_mode = 1 : crop between points (0, 0) and (a, a), where a is min(height, width)
         - crop_mode = 2 : crop between points crop_rec[0] and crop_rec[1], crop_rec is defined by the user through parameter
+        - crop_mode = 3 : chop, infer and merge
         - crop_rec : list of points of rectangle to crop
         """
         self.df = pd.DataFrame(data=[], columns=[])
@@ -153,7 +154,7 @@ class D2Inferer:
         self.predictor = DefaultPredictor(self.cfg)
         self.pred_dataset = []
         self.palette = np.array(color_palette(
-            palette='Set2', n_colors=self.num_classes+1))*255
+            palette='hls', n_colors=self.num_classes+1))*255
 
     def get_outputs(self, img: np.ndarray) -> dict:
         ''''''
@@ -185,6 +186,10 @@ class D2Inferer:
                                                                                             vis_keypoints_list,
                                                                                             kpt_confidences_list):
         """
+        if self.gray_on:
+            gray = cv2.cvtColor(img.copy(), cv2.COLOR_RGB2GRAY)
+            img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+
         outputs = self.get_outputs(img)
         result = dict()
         score_list = [float(val)
@@ -232,22 +237,30 @@ class D2Inferer:
 
     def chop_and_fix(
         self,
-        img, 
-        c_sizes=[1024], 
+        img,
+        c_sizes=[1024],
         c_overlaps=[100],
         padding_color=[255, 255, 255],
-        ):
+    ):
         img_h, img_w, _c = img.shape
         img = cv2.copyMakeBorder(
-            img, top=0, bottom=max(c_sizes), left=0, right=max(c_sizes), 
+            img, top=0, bottom=max(c_sizes), left=0, right=max(c_sizes),
             borderType=cv2.BORDER_CONSTANT, value=padding_color)
-        all_score_list = []
-        all_bbox_list = []
-        all_pred_class_list = []
-        all_pred_masks_list = []
-        all_pred_keypoints_list = []
-        all_vis_keypoints_list = []
-        all_kpt_confidences_list = []
+        result = dict()
+        result['score_list'] = []
+        result['bbox_list'] = []
+        result['pred_class_list'] = []
+        result['pred_masks_list'] = []
+        result['pred_keypoints_list'] = []
+        result['vis_keypoints_list'] = []
+        result['kpt_confidences_list'] = []
+        # all_score_list = []
+        # all_bbox_list = []
+        # all_pred_class_list = []
+        # all_pred_masks_list = []
+        # all_pred_keypoints_list = []
+        # all_vis_keypoints_list = []
+        # all_kpt_confidences_list = []
         for c_size, c_overlap in zip(c_sizes, c_overlaps):
             i = 0
             h = 0
@@ -269,44 +282,44 @@ class D2Inferer:
                     for bbox in bbox_list:
                         new_bbox = bbox + Point2D.from_list([w, h])
                         new_bbox_list.append(new_bbox)
-                    
-                    all_score_list += score_list
-                    all_bbox_list += new_bbox_list
-                    all_pred_class_list += pred_class_list
-                    all_pred_masks_list += pred_masks_list
-                    all_pred_keypoints_list += pred_keypoints_list
-                    all_vis_keypoints_list += vis_keypoints_list
-                    all_kpt_confidences_list += kpt_confidences_list
+
+                    result['score_list'] += score_list
+                    result['bbox_list'] += new_bbox_list
+                    result['pred_class_list'] += pred_class_list
+                    result['pred_masks_list'] += pred_masks_list
+                    result['pred_keypoints_list'] += pred_keypoints_list
+                    result['vis_keypoints_list'] += vis_keypoints_list
+                    result['kpt_confidences_list'] += kpt_confidences_list
                     # for bbox in bbox_list:
                     # print(bbox_list)
                     # if show_image(c_img, f"size: {c_size}, horizntal: {w}-{w+c_size}, vertical: {h}-{h+c_size}", 900):
                     #     return
                     # output = os.path.join(output_path, f't_{c_size}_{i}.jpg')
                     # useful_img = lbm.create_cropped_labelme(
-                    #     c_point1=[w, h], 
-                    #     c_point2=[w+c_size, h+c_size], 
+                    #     c_point1=[w, h],
+                    #     c_point2=[w+c_size, h+c_size],
                     #     output_img=f'{output}',
                     #     theshold=theshold)
                     i += 1
                     w += c_size - c_overlap
                 h += c_size - c_overlap
-        return all_score_list, all_bbox_list, all_pred_class_list, all_pred_masks_list, all_pred_keypoints_list, all_vis_keypoints_list, all_kpt_confidences_list
-
-
+        # return all_score_list, all_bbox_list, all_pred_class_list, all_pred_masks_list, all_pred_keypoints_list, all_vis_keypoints_list, all_kpt_confidences_list
+        return result
     def _infer_image(self, image_path: str,
-                    show_max_score_only: bool = False,
-                    show_class_label: bool = True,
-                    show_class_label_score_only: bool = False,
-                    show_keypoint_label: bool = True,
-                    show_bbox: bool = True,
-                    show_keypoints: bool = True,
-                    show_segmentation: bool = True,
-                    color_bbox: list = None,
-                    transparent_mask: bool = True,
-                    transparency_alpha: float = 0.3,
-                    ignore_keypoint_idx=None,
-                    # gt_path: str = None,
-                    ) -> np.ndarray:
+                     show_max_score_only: bool = False,
+                     show_class_label: bool = True,
+                     show_class_label_score_only: bool = False,
+                     show_keypoint_label: bool = True,
+                     show_bbox: bool = True,
+                     show_keypoints: bool = True,
+                     show_segmentation: bool = True,
+                     color_bbox: list = None,
+                     transparent_mask: bool = True,
+                     transparency_alpha: float = 0.3,
+                     ignore_keypoint_idx=None,
+                    show_legends: bool = False,
+                     # gt_path: str = None,
+                     ) -> np.ndarray:
         '''Returns the Inference result of a single image.'''
         _predict_image = partial(
             self.infer_image,
@@ -319,39 +332,51 @@ class D2Inferer:
             color_bbox=color_bbox,
             transparent_mask=transparent_mask, transparency_alpha=transparency_alpha,
             ignore_keypoint_idx=ignore_keypoint_idx,
+            show_legends=show_legends
             # gt_path=gt_path
-            )
-        _img = cv2.imread(image_path)
-        if self.gray_on:
-            gray = cv2.cvtColor(_img, cv2.COLOR_RGB2GRAY)
-            img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
-        else:
-            img = _img
+        )
+        img = cv2.imread(image_path)
+        # if self.gray_on:
+        #     gray = cv2.cvtColor(_img, cv2.COLOR_RGB2GRAY)
+        #     img = cv2.cvtColor(gray.copy(), cv2.COLOR_GRAY2RGB)
+        # else:
+        # img = _img
         if self.crop_mode == 1:
             h, w, _ = img.shape
             a = min(h, w)
             img = img[0:a, 0:a]
-            return _predict_image(img)
+            output = _predict_image(img)
         elif self.crop_mode == 2:
             p1, p2 = self.crop_rec
-            img = img[p1[1]:p2[1], p1[0]:p2[0]]
-            return _predict_image(img)
+            p = BBox.from_list([p1, p2])
+            img = img[p.ymin: p.ymax, p.xmin: p.xmax]
+            output = _predict_image(img)
         elif self.crop_mode == 3:
-            score_list, bbox_list, pred_class_list, \
-            pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list  \
-            = self.chop_and_fix(img, self.crop_mode3_sizes, self.crop_mode3_overlaps)
+            predict_dict = self.chop_and_fix(img, self.crop_mode3_sizes, self.crop_mode3_overlaps)
             # output = _img
+            
+            score_list = predict_dict['score_list']
+            bbox_list = predict_dict['bbox_list']
+            # print(bbox_list)
+            pred_class_list = predict_dict['pred_class_list']
+            pred_masks_list = predict_dict['pred_masks_list']
+            pred_keypoints_list = predict_dict['pred_keypoints_list']
+            vis_keypoints_list = predict_dict['vis_keypoints_list']
+            kpt_confidences_list = predict_dict['kpt_confidences_list']
             output = img
-            output = self.draw_infer(show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list)
-            return output
-        
-        else:
-            printj.yellow('normal')
-            return _predict_image(img)
+            output = self.draw_infer(show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask,
+                                     transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list,
+                                     show_legends)
+            # return output
 
-    def infer_image(self, 
-                    img: str=None,
-                    image_path: str=None,
+        else:
+            output = _predict_image(img)
+
+        return output
+
+    def infer_image(self,
+                    img: str = None,
+                    image_path: str = None,
                     show_max_score_only: bool = False,
                     show_class_label: bool = True,
                     show_class_label_score_only: bool = False,
@@ -363,6 +388,7 @@ class D2Inferer:
                     transparent_mask: bool = True,
                     transparency_alpha: float = 0.3,
                     ignore_keypoint_idx=None,
+                    show_legends: bool = False,
                     # gt_path: str = None,
                     ) -> np.ndarray:
         '''Returns the Inference result of a single image.'''
@@ -386,7 +412,10 @@ class D2Inferer:
         #     return
         output = img.copy()
         predict_dict = self.predict(img=img)
-        output = self.draw_gt(image_path.split("/")[-1], output)
+        status_gt, output = self.draw_gt(image_path.split("/")[-1], output)
+        # if not status_gt:
+        #     printj.green(status_gt)
+        #     output = cv2.imread(image_path)
         score_list = predict_dict['score_list']
         bbox_list = predict_dict['bbox_list']
         # print(bbox_list)
@@ -397,29 +426,47 @@ class D2Inferer:
         kpt_confidences_list = predict_dict['kpt_confidences_list']
         # printj.cyan(predict_dict['bbox_list'])
 
-
-        output = self.draw_infer(show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list)
+        output = self.draw_infer(show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, 
+                                 show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask,
+                                 transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, 
+                                 pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list, show_legends)
 
         return output
 
-    def draw_infer(self, show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list):
+    def draw_infer(self, show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, 
+                   show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha, 
+                   ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, 
+                   vis_keypoints_list, kpt_confidences_list, show_legends=False):
+        if self.gt_path is None:
+            self.img_id_without_gt = next(self.counter)
         max_score_list = dict()
         max_score_pred_list = dict()
-        img = output.copy()
+        output = output.copy()
         if show_max_score_only:
             for i, class_name in enumerate(self.class_names):
                 max_score_list[class_name] = -1
         # Setting color palletes/ class name legend on top left side of the image if color_bbox is None:
         if color_bbox is None:
-            for i, name in enumerate(self.class_names):
-                cv2.putText(
-                    img=output, text=name,
-                    # org=(5, 30 + 30*i), 
-                    # org=(5, 100 + 70*i), 
-                    org=(5, output.shape[0]-(100 + 70*i)), 
-                    fontFace=cv2.FONT_HERSHEY_COMPLEX,
-                    fontScale=2, color=self.palette[i],
-                    thickness=2, bottomLeftOrigin=False)
+            if show_legends:
+                for i, name in enumerate(self.class_names):
+                    scale = 2
+                    if scale == 1:
+                        cv2.putText(
+                            img=output, text=name,
+                            # org=(5, 30 + 30*i),
+                            # org=(5, 100 + 70*i),
+                            org=(5, output.shape[0]-(200 + 30*i)),
+                            # org=(5, output.shape[0]-(100 + 70*i)),
+                            fontFace=cv2.FONT_HERSHEY_COMPLEX,
+                            fontScale=1, color=self.palette[i],
+                            thickness=1, bottomLeftOrigin=False)
+                    elif scale == 2:
+                        cv2.putText(
+                            img=output, text=name,
+                            org=(5, output.shape[0]-(100 + 70*i)),
+                            fontFace=cv2.FONT_HERSHEY_COMPLEX,
+                            fontScale=2, color=self.palette[i],
+                            thickness=2, bottomLeftOrigin=False)
         for score, pred_class, bbox, mask, keypoints, vis_keypoints, kpt_confidences in zip(score_list,
                                                                                             pred_class_list,
                                                                                             bbox_list,
@@ -463,78 +510,81 @@ class D2Inferer:
             # if show_image(_img):
             #     return
             """
-            if show_max_score_only:
-                for i, class_name in enumerate(self.class_names):
-                    if class_name == pred_class:
-                        if max_score_list[class_name] < score:
-                            max_score_list[class_name] = score
-                            max_score_pred_list[class_name] = {
-                                "score": score,
-                                "pred_class": pred_class,
-                                "bbox": bbox,
-                                "mask": mask,
-                                "keypoints": keypoints,
-                                "vis_keypoints": vis_keypoints,
-                                "kpt_confidences": kpt_confidences,
-                            }
-            else:
-                if mask is not None and show_segmentation:
-                    output = draw_mask_bool(img=output, mask_bool=mask, transparent=transparent_mask,
-                                            alpha=transparency_alpha)
-                if show_class_label_score_only:
-                    output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
-                                       show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
+            # if pred_class in ["switch"]:
+            if True:
+                if show_max_score_only:
+                    for i, class_name in enumerate(self.class_names):
+                        if class_name == pred_class:
+                            if max_score_list[class_name] < score:
+                                max_score_list[class_name] = score
+                                max_score_pred_list[class_name] = {
+                                    "score": score,
+                                    "pred_class": pred_class,
+                                    "bbox": bbox,
+                                    "mask": mask,
+                                    "keypoints": keypoints,
+                                    "vis_keypoints": vis_keypoints,
+                                    "kpt_confidences": kpt_confidences,
+                                }
                 else:
-                    output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
-                                       show_bbox=show_bbox, show_label=show_class_label, text=f'{pred_class}', label_orientation='right')
-                    output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
-                                       show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
-                if keypoints is not None and show_keypoints:
-                    output = draw_keypoints(img=output, keypoints=keypoints, show_keypoints=show_keypoints,
-                                            keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
-                                            ignore_kpt_idx=ignore_keypoint_idx)
-                xmin, ymin, xmax, ymax = bbox.to_int().to_list()
-                pred_to_append = dict()
-                if self.gt_path:
-                    for category in self.gt_data["categories"]:
-                        if category["name"] == pred_class:
-                            cat_id = category["id"]
-                    pred_to_append["image_id"] = self.image_id
-                    pred_to_append["category_id"] = cat_id
-                else:
-                    pred_to_append["image_id"] = next(self.counter)
-                    pred_to_append["category_id"] = cat_id
-                pred_to_append["bbox"] = BBox(xmin, ymin, xmax, ymax).to_list(output_format='pminsize')
-                if keypoints:
-                    _k = []
-                    for keypoint in keypoints:
-                        printj.red(keypoint)
-                        x, y, c = keypoint
-                        _k.append(int(x))
-                        _k.append(int(y))
-                        _k.append(1)
-                    pred_to_append["keypoints"] = _k
-                pred_to_append["score"] = score
-                self.pred_dataset.append(pred_to_append)
-                printj.red(keypoints)
-        if show_max_score_only:
-            for i, class_name in enumerate(self.class_names):
-                cat_id = self.class_names.index(class_name)
-                if color_bbox:
-                    _color_bbox = color_bbox
-                else:
-                    _color_bbox = self.palette[cat_id]
-                if max_score_list[class_name] > 0:
-                    max_pred = max_score_pred_list[class_name]
-                    if max_pred["mask"] is not None and show_segmentation:
-                        output = draw_mask_bool(img=output, mask_bool=max_pred["mask"], color=_color_bbox, transparent=transparent_mask,
+                    if mask is not None and show_segmentation:
+                        output = draw_mask_bool(img=output, mask_bool=mask, transparent=transparent_mask,
                                                 alpha=transparency_alpha)
-                    output = draw_bbox(img=output, bbox=max_pred["bbox"],
-                                       show_bbox=show_bbox, show_label=show_class_label, text=f'{max_pred["pred_class"]} {round(max_pred["score"], 2)}')
-                    if max_pred["keypoints"] is not None and show_keypoints:
-                        output = draw_keypoints(img=output, keypoints=max_pred["keypoints"], show_keypoints=show_keypoints,
+                    if show_class_label_score_only:
+                        output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
+                                           show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
+                    else:
+                        output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
+                                           show_bbox=show_bbox, show_label=show_class_label, text=f'{pred_class}', label_orientation='right')
+                        output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
+                                           show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
+                    if keypoints is not None and show_keypoints:
+                        output = draw_keypoints(img=output, keypoints=keypoints, show_keypoints=show_keypoints,
                                                 keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
                                                 ignore_kpt_idx=ignore_keypoint_idx)
+                    xmin, ymin, xmax, ymax = bbox.to_int().to_list()
+                    pred_to_append = dict()
+                    if self.gt_path:
+                        for category in self.gt_data["categories"]:
+                            if category["name"] == pred_class:
+                                cat_id = category["id"]
+                        pred_to_append["image_id"] = self.image_id
+                        pred_to_append["category_id"] = cat_id
+                    else:
+                        pred_to_append["image_id"] = self.img_id_without_gt
+                        pred_to_append["category_id"] = cat_id
+                    pred_to_append["bbox"] = BBox(
+                        xmin, ymin, xmax, ymax).to_list(output_format='pminsize')
+                    if keypoints:
+                        _k = []
+                        for keypoint in keypoints:
+                            # printj.red(keypoint)
+                            x, y, c = keypoint
+                            _k.append(int(x))
+                            _k.append(int(y))
+                            _k.append(1)
+                        pred_to_append["keypoints"] = _k
+                    pred_to_append["score"] = score
+                    self.pred_dataset.append(pred_to_append)
+                    # printj.red(keypoints)
+            if show_max_score_only:
+                for i, class_name in enumerate(self.class_names):
+                    cat_id = self.class_names.index(class_name)
+                    if color_bbox:
+                        _color_bbox = color_bbox
+                    else:
+                        _color_bbox = self.palette[cat_id]
+                    if max_score_list[class_name] > 0:
+                        max_pred = max_score_pred_list[class_name]
+                        if max_pred["mask"] is not None and show_segmentation:
+                            output = draw_mask_bool(img=output, mask_bool=max_pred["mask"], color=_color_bbox, transparent=transparent_mask,
+                                                    alpha=transparency_alpha)
+                        output = draw_bbox(img=output, bbox=max_pred["bbox"],
+                                           show_bbox=show_bbox, show_label=show_class_label, text=f'{max_pred["pred_class"]} {round(max_pred["score"], 2)}')
+                        if max_pred["keypoints"] is not None and show_keypoints:
+                            output = draw_keypoints(img=output, keypoints=max_pred["keypoints"], show_keypoints=show_keypoints,
+                                                    keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
+                                                    ignore_kpt_idx=ignore_keypoint_idx)
         return output
 
     def infer(self, input_type: Union[str, int],
@@ -545,6 +595,7 @@ class D2Inferer:
               show_class_label: bool = True,
               show_class_label_score_only: bool = False,
               show_keypoint_label: bool = True,
+              show_legends: bool = False,
               show_bbox: bool = True,
               show_keypoints: bool = True,
               show_segmentation: bool = True,
@@ -584,11 +635,11 @@ class D2Inferer:
                 self.gt_data = json.load(json_file)
         if result_json_path is None:
             if dir_exists(output_path):
-                result_json_path = f'{output_path}/result.json'
+                self.result_json_path = f'{output_path}/result.json'
             else:
                 _p = output_path.split('.')
                 _output_path = '.'.join(_p[:-1])
-                result_json_path = f'{_output_path}_result.json'
+                self.result_json_path = f'{_output_path}.json'
 
         predict_image = partial(self._infer_image,
                                 show_max_score_only=show_max_score_only,
@@ -599,6 +650,7 @@ class D2Inferer:
                                 color_bbox=color_bbox,
                                 transparent_mask=transparent_mask, transparency_alpha=transparency_alpha,
                                 ignore_keypoint_idx=ignore_keypoint_idx,
+                                show_legends=show_legends
                                 # gt_path=gt_path,
                                 )
         if input_type == "image":
@@ -680,14 +732,10 @@ class D2Inferer:
             raise NotImplementedError
         else:
             raise Exception
-        try:
-            with open(result_json_path, 'w') as outfile:
-                json.dump(self.pred_dataset, outfile, indent=4)
-        except NotADirectoryError:
-            printj.red(f'Not a directory: {result_json_path}')
-
+        # printj.cyan(self.pred_dataset)
+        self.write_predictions_json()
         if self.gt_path:
-            print(self.df)
+            # print(self.df)
             # pip install openpyxl
             self.df.to_excel(os.path.abspath(
                 f'{result_json_path}/../test_data.xlsx'))
@@ -698,6 +746,14 @@ class D2Inferer:
             #     writer = csv.DictWriter(csvfile,
             #                             # fieldnames=fieldnames
             #                             )
+
+    def write_predictions_json(self):
+        try:
+            with open(self.result_json_path, 'w+') as outfile:
+                json.dump(self.pred_dataset, outfile, indent=4)
+            printj.cyan(f'Created inference result file: {self.result_json_path}')
+        except NotADirectoryError:
+            printj.red(f'Not a directory: {self.result_json_path}')
 
     def draw_gt(self, image_name, output):
         if self.gt_path:
@@ -766,7 +822,9 @@ class D2Inferer:
                                                           index=[self.image_id]
                                                           ))
 
-        return output
+            return 1, output
+        else:
+            return 0, output
 
 
 if __name__ == "__main__":

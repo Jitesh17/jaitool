@@ -96,7 +96,7 @@ class AugmentedLoader(DatasetMapper):
         image = self.aug(image=np.array(image))['image']
         seq_aug_for_no_seg = almost_always(iaa.Sequential(
             [
-                iaa.Rot90(ia.ALL, keep_size=False)
+                # iaa.Rot90(ia.ALL, keep_size=False)
             ]
         ))
         seq_aug_for_seg = sometimes(iaa.Sequential(

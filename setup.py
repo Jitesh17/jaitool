@@ -43,6 +43,8 @@ setup(
         "pytest",
         "albumentations",
         "seaborn",
+        "funcy",
+        "sklearn"
     ],
     python_requires='>=3.6',
 )

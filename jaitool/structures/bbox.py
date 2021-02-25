@@ -1,4 +1,5 @@
 from __future__ import annotations
+# from imgaug.imgaug import flatten
 
 import printj
 from imgaug.augmentables.bbs import BoundingBox as ImgAugBBox
@@ -10,6 +11,13 @@ from .keypoint import Keypoint2D
 from .point import Point2D  # , Point2D_List
 import numpy as np
 
+
+def flatten(list_of_lists):
+    if len(list_of_lists) == 0:
+        return list_of_lists
+    if isinstance(list_of_lists[0], list):
+        return flatten(list_of_lists[0]) + flatten(list_of_lists[1:])
+    return list_of_lists[:1] + flatten(list_of_lists[1:])
 class BBox:
     def __init__(self, xmin, ymin, xmax, ymax):
         # self.xmin = xmin
@@ -154,6 +162,12 @@ class BBox:
     #     """return width"""
     #     return self.xmax - self.xmin
 
+    def to_point_list(self) -> list:
+        """
+        output_format: [[xmin, ymin], [xmax, ymax]]
+        """
+        return [[self.xmin, self.ymin], [self.xmax, self.ymax]]
+
     def to_list(self, output_format: str = 'pminpmax') -> list:
         """
         output_format options:
@@ -177,10 +191,17 @@ class BBox:
         """
         # check_value(input_format, valid_value_list=['pminpmax', 'pminsize'])
         if input_format == 'pminpmax':
-            xmin, ymin, xmax, ymax = bbox
+            if len(bbox)==4:
+                xmin, ymin, xmax, ymax = bbox
+            else:
+                xmin, ymin, xmax, ymax = flatten(bbox)
+                
             return BBox(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax)
         elif input_format == 'pminsize':
-            xmin, ymin, bbox_w, bbox_h = bbox
+            if len(bbox)==4:
+                xmin, ymin, bbox_w, bbox_h  = bbox
+            else:
+                xmin, ymin, bbox_w, bbox_h = flatten(bbox)
             xmax, ymax = xmin + bbox_w, ymin + bbox_h
             return BBox(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax)
         else:
