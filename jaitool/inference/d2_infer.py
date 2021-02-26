@@ -305,6 +305,7 @@ class D2Inferer:
                 h += c_size - c_overlap
         # return all_score_list, all_bbox_list, all_pred_class_list, all_pred_masks_list, all_pred_keypoints_list, all_vis_keypoints_list, all_kpt_confidences_list
         return result
+
     def _infer_image(self, image_path: str,
                      show_max_score_only: bool = False,
                      show_class_label: bool = True,
@@ -317,7 +318,7 @@ class D2Inferer:
                      transparent_mask: bool = True,
                      transparency_alpha: float = 0.3,
                      ignore_keypoint_idx=None,
-                    show_legends: bool = False,
+                     show_legends: bool = False,
                      # gt_path: str = None,
                      ) -> np.ndarray:
         '''Returns the Inference result of a single image.'''
@@ -352,12 +353,13 @@ class D2Inferer:
             img = img[p.ymin: p.ymax, p.xmin: p.xmax]
             output = _predict_image(img)
         elif self.crop_mode == 3:
-            predict_dict = self.chop_and_fix(img, self.crop_mode3_sizes, self.crop_mode3_overlaps)
-            # output = _img
-            
+            predict_dict = self.chop_and_fix(
+                img, self.crop_mode3_sizes, self.crop_mode3_overlaps)
+            if self.filter_prediction:
+                predict_dict = self.filter_predictions(predict_dict)
+
             score_list = predict_dict['score_list']
             bbox_list = predict_dict['bbox_list']
-            # print(bbox_list)
             pred_class_list = predict_dict['pred_class_list']
             pred_masks_list = predict_dict['pred_masks_list']
             pred_keypoints_list = predict_dict['pred_keypoints_list']
@@ -412,13 +414,16 @@ class D2Inferer:
         #     return
         output = img.copy()
         predict_dict = self.predict(img=img)
+
+        if self.filter_prediction:
+            predict_dict = self.filter_predictions(predict_dict)
+
         status_gt, output = self.draw_gt(image_path.split("/")[-1], output)
         # if not status_gt:
         #     printj.green(status_gt)
         #     output = cv2.imread(image_path)
         score_list = predict_dict['score_list']
         bbox_list = predict_dict['bbox_list']
-        # print(bbox_list)
         pred_class_list = predict_dict['pred_class_list']
         pred_masks_list = predict_dict['pred_masks_list']
         pred_keypoints_list = predict_dict['pred_keypoints_list']
@@ -426,16 +431,16 @@ class D2Inferer:
         kpt_confidences_list = predict_dict['kpt_confidences_list']
         # printj.cyan(predict_dict['bbox_list'])
 
-        output = self.draw_infer(show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, 
+        output = self.draw_infer(show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label,
                                  show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask,
-                                 transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, 
+                                 transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list,
                                  pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list, show_legends)
 
         return output
 
-    def draw_infer(self, show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, 
-                   show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha, 
-                   ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, 
+    def draw_infer(self, show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label,
+                   show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha,
+                   ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list,
                    vis_keypoints_list, kpt_confidences_list, show_legends=False):
         if self.gt_path is None:
             self.img_id_without_gt = next(self.counter)
@@ -467,6 +472,7 @@ class D2Inferer:
                             fontFace=cv2.FONT_HERSHEY_COMPLEX,
                             fontScale=2, color=self.palette[i],
                             thickness=2, bottomLeftOrigin=False)
+
         for score, pred_class, bbox, mask, keypoints, vis_keypoints, kpt_confidences in zip(score_list,
                                                                                             pred_class_list,
                                                                                             bbox_list,
@@ -587,6 +593,66 @@ class D2Inferer:
                                                     ignore_kpt_idx=ignore_keypoint_idx)
         return output
 
+    def filter_predictions(self, predict_dict, iou_thres1=0.5, iou_thres2=0.1):
+        """
+        Returns the predictions after removing overlapping bounding boxes.
+        - iou_thres1: to remove redundant overlap
+        - iou_thres2: to remove overlap caused by "chop and merge"
+        """
+
+        score_list = predict_dict['score_list']
+        bbox_list = predict_dict['bbox_list']
+        pred_class_list = predict_dict['pred_class_list']
+        pred_masks_list = predict_dict['pred_masks_list']
+        pred_keypoints_list = predict_dict['pred_keypoints_list']
+        vis_keypoints_list = predict_dict['vis_keypoints_list']
+        kpt_confidences_list = predict_dict['kpt_confidences_list']
+        remove_idxs = []
+        for i in range(len(score_list)-1):
+            if i in remove_idxs:
+                continue
+            for j in range(i+1, len(score_list)):
+                if j in remove_idxs:
+                    continue
+                iou = BBox.iou(bbox_list[i], bbox_list[j])
+                if iou > iou_thres1:
+                    if score_list[i] > score_list[j]:
+                        remove_idxs.append(j)
+                    else:
+                        remove_idxs.append(i)
+                elif iou > iou_thres2:
+                    if pred_class_list[i] == pred_class_list[j]:
+                        if bbox_list[i].area > bbox_list[j].area:
+                            remove_idxs.append(j)
+                        else:
+                            remove_idxs.append(i)
+                # print(i, j, round(iou, 3), remove_idxs)
+        score_list_filtered = []
+        bbox_list_filtered = []
+        pred_class_list_filtered = []
+        pred_masks_list_filtered = []
+        pred_keypoints_list_filtered = []
+        vis_keypoints_list_filtered = []
+        kpt_confidences_list_filtered = []
+        for i in range(len(score_list)):
+            if i in remove_idxs:
+                continue
+            score_list_filtered.append(score_list[i])
+            bbox_list_filtered.append(bbox_list[i])
+            pred_class_list_filtered.append(pred_class_list[i])
+            pred_masks_list_filtered.append(pred_masks_list[i])
+            pred_keypoints_list_filtered.append(pred_keypoints_list[i])
+            vis_keypoints_list_filtered.append(vis_keypoints_list[i])
+            kpt_confidences_list_filtered.append(kpt_confidences_list[i])
+        predict_dict['score_list'] = score_list_filtered
+        predict_dict['bbox_list'] = bbox_list_filtered
+        predict_dict['pred_class_list'] = pred_class_list_filtered
+        predict_dict['pred_masks_list'] = pred_masks_list_filtered
+        predict_dict['pred_keypoints_list'] = pred_keypoints_list_filtered
+        predict_dict['vis_keypoints_list'] = vis_keypoints_list_filtered
+        predict_dict['kpt_confidences_list'] = kpt_confidences_list_filtered
+        return predict_dict
+
     def infer(self, input_type: Union[str, int],
               output_type: Union[str, int],
               input_path: Union[str, List[str]],
@@ -603,6 +669,7 @@ class D2Inferer:
               transparent_mask: bool = True,
               transparency_alpha: float = 0.3,
               ignore_keypoint_idx=None,
+              filter_predictions: bool = False,
               gt_path: Union[str, List[str]] = None,
               result_json_path: str = None):
         """
@@ -622,6 +689,7 @@ class D2Inferer:
         ---
         The inference result of all data formats.
         """
+        self.filter_prediction = filter_predictions
         self.counter = infinite_sequence()
         check_value(input_type,
                     check_from=["image", "image_list", "image_directory", "image_directories_list", "video",
@@ -751,7 +819,8 @@ class D2Inferer:
         try:
             with open(self.result_json_path, 'w+') as outfile:
                 json.dump(self.pred_dataset, outfile, indent=4)
-            printj.cyan(f'Created inference result file: {self.result_json_path}')
+            printj.cyan(
+                f'Created inference result file: {self.result_json_path}')
         except NotADirectoryError:
             printj.red(f'Not a directory: {self.result_json_path}')
 

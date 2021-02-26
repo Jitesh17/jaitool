@@ -1,6 +1,8 @@
 from __future__ import annotations
-# from imgaug.imgaug import flatten
 
+from typing import List, Tuple
+
+import numpy as np
 import printj
 from imgaug.augmentables.bbs import BoundingBox as ImgAugBBox
 # from imgaug.augmentables.bbs import BoundingBoxesOnImage as ImgAugBBoxes
@@ -9,7 +11,8 @@ from pandas.conftest import cls
 
 from .keypoint import Keypoint2D
 from .point import Point2D  # , Point2D_List
-import numpy as np
+
+# from imgaug.imgaug import flatten
 
 
 def flatten(list_of_lists):
@@ -18,6 +21,8 @@ def flatten(list_of_lists):
     if isinstance(list_of_lists[0], list):
         return flatten(list_of_lists[0]) + flatten(list_of_lists[1:])
     return list_of_lists[:1] + flatten(list_of_lists[1:])
+
+
 class BBox:
     def __init__(self, xmin, ymin, xmax, ymax):
         # self.xmin = xmin
@@ -32,7 +37,8 @@ class BBox:
         self.height = self.ymax - self.ymin
         self.area = self.width*self.height
         # self.center = ((self.ymax+self.ymin)//2, (self.xmax + self.xmin)//2)
-        self.center = (np.mean([self.xmin, self.xmax], dtype=np.int), np.mean([self.ymin, self.ymax], dtype=np.int))
+        self.center = (np.mean([self.xmin, self.xmax], dtype=np.int), np.mean(
+            [self.ymin, self.ymax], dtype=np.int))
 
     def __str__(self):
         class_string = str(type(self)).replace(
@@ -191,15 +197,15 @@ class BBox:
         """
         # check_value(input_format, valid_value_list=['pminpmax', 'pminsize'])
         if input_format == 'pminpmax':
-            if len(bbox)==4:
+            if len(bbox) == 4:
                 xmin, ymin, xmax, ymax = bbox
             else:
                 xmin, ymin, xmax, ymax = flatten(bbox)
-                
+
             return BBox(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax)
         elif input_format == 'pminsize':
-            if len(bbox)==4:
-                xmin, ymin, bbox_w, bbox_h  = bbox
+            if len(bbox) == 4:
+                xmin, ymin, bbox_w, bbox_h = bbox
             else:
                 xmin, ymin, bbox_w, bbox_h = flatten(bbox)
             xmax, ymax = xmin + bbox_w, ymin + bbox_h
@@ -226,10 +232,10 @@ class BBox:
             return False
 
     def pad(self, pad_left: int = 0, pad_right: int = 0, pad_top: int = 0, pad_bottom: int = 0, img_width: int = np.inf, img_height: int = np.inf) -> BBox:
-        return BBox(xmin = max(self.xmin - pad_left, 0),
-                      ymin = max(self.ymin - pad_top, 0),
-                      xmax = min(self.xmax + pad_right, img_width),
-                      ymax = min(self.ymax + pad_bottom, img_width))
+        return BBox(xmin=max(self.xmin - pad_left, 0),
+                    ymin=max(self.ymin - pad_top, 0),
+                    xmax=min(self.xmax + pad_right, img_width),
+                    ymax=min(self.ymax + pad_bottom, img_width))
 
     def coord_in_cropped_frame(self, cropped_frame: BBox, theshold: float = 1) -> BBox:
         result = BBox(xmin=self.xmin-cropped_frame.xmin,
@@ -248,3 +254,21 @@ class BBox:
         result.xmax = min(cropped_frame.width, result.xmax)
         result.ymax = min(cropped_frame.height, result.ymax)
         return result.to_int()
+
+    @staticmethod
+    def iou(bbox1: BBox, bbox2: BBox):
+        xA = max(bbox1.xmin, bbox2.xmin)
+        yA = max(bbox1.ymin, bbox2.ymin)
+        xB = min(bbox1.xmax, bbox2.xmax)
+        yB = min(bbox1.ymax, bbox2.ymax)
+        interW = xB - xA
+        interH = yB - yA
+        if interW <= 0 or interH <= 0:
+            return 0
+        interArea = interW * interH
+        unionArea = bbox1.area + bbox2.area - interArea
+        if unionArea:
+            iou = interArea / unionArea
+        else:
+            iou = np.inf
+        return iou
