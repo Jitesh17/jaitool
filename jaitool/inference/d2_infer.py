@@ -48,7 +48,8 @@ class D2Inferer:
             size_min: int = None,
             size_max: int = None,
             key_seg_together: bool = False,
-            gray_on=False,
+            gray_on: bool=False,
+            color_filter_on: bool=False,
             crop_mode: int = None,
             crop_mode2_rec: Union[int, List[int]] = None,
             crop_mode3_sizes: Union[int, List[int]] = None,
@@ -78,6 +79,7 @@ class D2Inferer:
         """
         self.df = pd.DataFrame(data=[], columns=[])
         self.gray_on = gray_on
+        self.color_filter_on = color_filter_on
         self.crop_mode = crop_mode
         self.crop_rec = crop_mode2_rec
         self.crop_mode3_sizes = crop_mode3_sizes
@@ -337,6 +339,11 @@ class D2Inferer:
             # gt_path=gt_path
         )
         img = cv2.imread(image_path)
+        # show_image(output)
+        output = img.copy()
+        if self.color_filter_on:
+            img = self.color_filter(img)
+        # show_image()
         # if self.gray_on:
         #     gray = cv2.cvtColor(_img, cv2.COLOR_RGB2GRAY)
         #     img = cv2.cvtColor(gray.copy(), cv2.COLOR_GRAY2RGB)
@@ -356,7 +363,7 @@ class D2Inferer:
             predict_dict = self.chop_and_fix(
                 img, self.crop_mode3_sizes, self.crop_mode3_overlaps)
             if self.filter_prediction:
-                predict_dict = self.filter_predictions(predict_dict)
+                predict_dict = self.filter_predictions(predict_dict, iou_thres1=self.filter_iou_thres1, iou_thres2=self.filter_iou_thres2)
 
             score_list = predict_dict['score_list']
             bbox_list = predict_dict['bbox_list']
@@ -365,7 +372,7 @@ class D2Inferer:
             pred_keypoints_list = predict_dict['pred_keypoints_list']
             vis_keypoints_list = predict_dict['vis_keypoints_list']
             kpt_confidences_list = predict_dict['kpt_confidences_list']
-            output = img
+            
             output = self.draw_infer(show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label, show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask,
                                      transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list,
                                      show_legends)
@@ -373,8 +380,43 @@ class D2Inferer:
 
         else:
             output = _predict_image(img)
-
         return output
+
+    def color_filter(self, img, mask_types=["Red", "Green", "Blue"]):
+        mask_types = [x.lower() for x in mask_types]
+        masks = []
+        """ Blue """
+        if "blue" in mask_types:
+            lower = np.array([0, 0, 180])  # , dtype="uint8")
+            upper = np.array([70, 70, 255])  # , dtype="uint8")
+            mask = cv2.inRange(img, lower, upper)
+            mask = cv2.bitwise_not(src=mask)
+            masks.append(mask)
+        """ Green """
+        if "green" in mask_types:
+            lower = np.array([0, 190, 0])  # , dtype="uint8")
+            upper = np.array([180, 255, 180])  # , dtype="uint8")
+            mask = cv2.inRange(img, lower, upper)
+            mask = cv2.bitwise_not(src=mask)
+            masks.append(mask)
+        """ Red """
+        if "red" in mask_types:
+            lower = np.array([180, 0, 0])  # , dtype="uint8")
+            upper = np.array([255, 70, 70])  # , dtype="uint8")
+            mask = cv2.inRange(img, lower, upper)
+            mask = cv2.bitwise_not(src=mask)
+            masks.append(mask)
+        if len(masks):
+            mask = np.ones_like(img[:, :, 0])*255
+            for m in masks:
+                mask = cv2.bitwise_and(mask, m)
+            # im = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+            for i in range(3):
+                img[:, :, i] = cv2.bitwise_or(mask, img[:, :, i])
+            # show_image(img)
+            return img
+        else:
+            return img
 
     def infer_image(self,
                     img: str = None,
@@ -670,6 +712,8 @@ class D2Inferer:
               transparency_alpha: float = 0.3,
               ignore_keypoint_idx=None,
               filter_predictions: bool = False,
+              filter_iou_thres1: float = 0.5,
+              filter_iou_thres2: float = 0.2,
               gt_path: Union[str, List[str]] = None,
               result_json_path: str = None):
         """
@@ -690,6 +734,9 @@ class D2Inferer:
         The inference result of all data formats.
         """
         self.filter_prediction = filter_predictions
+        self.filter_iou_thres1 = filter_iou_thres1
+        self.filter_iou_thres2 = filter_iou_thres2
+        
         self.counter = infinite_sequence()
         check_value(input_type,
                     check_from=["image", "image_list", "image_directory", "image_directories_list", "video",
@@ -701,13 +748,6 @@ class D2Inferer:
             check_file_exists(gt_path)
             with open(gt_path) as json_file:
                 self.gt_data = json.load(json_file)
-        if result_json_path is None:
-            if dir_exists(output_path):
-                self.result_json_path = f'{output_path}/result.json'
-            else:
-                _p = output_path.split('.')
-                _output_path = '.'.join(_p[:-1])
-                self.result_json_path = f'{_output_path}.json'
 
         predict_image = partial(self._infer_image,
                                 show_max_score_only=show_max_score_only,
@@ -801,6 +841,13 @@ class D2Inferer:
         else:
             raise Exception
         # printj.cyan(self.pred_dataset)
+        if result_json_path is None:
+            if dir_exists(output_path):
+                self.result_json_path = f'{output_path}/result.json'
+            else:
+                _p = output_path.split('.')
+                _output_path = '.'.join(_p[:-1])
+                self.result_json_path = f'{_output_path}.json'
         self.write_predictions_json()
         if self.gt_path:
             # print(self.df)

@@ -25,7 +25,7 @@ torchvision~=0.7.0
 matplotlib~=3.3.1
 pydot~=1.4.1
 tabulate~=0.8.7
-fvcore~=0.1.1.post20200716
+iopath
 portalocker~=2.0.0
 termcolor~=1.1.0
 cachetools~=4.1.1
@@ -33,7 +33,7 @@ certifi~=2020.6.20
 urllib3~=1.25.10
 pandas~=1.1.0
 python-dateutil~=2.8.1
-printj~=0.0.2
+printj
 attrs~=19.3.0
 pluggy~=0.13.1
 iniconfig~=1.0.1
@@ -51,6 +51,4 @@ cloudpickle~=1.5.0
 pycocotools~=2.0.1
 packaging~=20.4
 zipp~=3.1.0
-pyjeasy~=0.0.3
-jaitool~=0.0.3
-detectron2~=0.1.2
+detectron2
