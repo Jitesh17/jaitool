@@ -575,16 +575,17 @@ class D2Inferer:
                                     "kpt_confidences": kpt_confidences,
                                 }
                 else:
+                    thickness = 3
                     if mask is not None and show_segmentation:
-                        output = draw_mask_bool(img=output, mask_bool=mask, transparent=transparent_mask,
+                        output = draw_mask_bool(img=output, mask_bool=mask, color=_color_bbox, transparent=transparent_mask,
                                                 alpha=transparency_alpha)
                     if show_class_label_score_only:
-                        output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
+                        output = draw_bbox(img=output, bbox=bbox, color=_color_bbox, thickness=thickness,
                                            show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
                     else:
-                        output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
+                        output = draw_bbox(img=output, bbox=bbox, color=_color_bbox, thickness=thickness,
                                            show_bbox=show_bbox, show_label=show_class_label, text=f'{pred_class}', label_orientation='right')
-                        output = draw_bbox(img=output, bbox=bbox, color=_color_bbox,
+                        output = draw_bbox(img=output, bbox=bbox, color=_color_bbox, thickness=thickness,
                                            show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
                     if keypoints is not None and show_keypoints:
                         output = draw_keypoints(img=output, keypoints=keypoints, show_keypoints=show_keypoints,
@@ -618,7 +619,7 @@ class D2Inferer:
             if show_max_score_only:
                 for i, class_name in enumerate(self.class_names):
                     cat_id = self.class_names.index(class_name)
-                    if color_bbox:
+                    if color_bbox is not None:
                         _color_bbox = color_bbox
                     else:
                         _color_bbox = self.palette[cat_id]

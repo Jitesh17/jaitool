@@ -2,6 +2,7 @@
 import cv2
 import numpy as np
 from pyjeasy.image_utils.edit import resize_img
+from pyjeasy.image_utils import show_image
 from torch._C import Size
 
 from jaitool.structures import BBox, Segmentation
@@ -113,17 +114,23 @@ def draw_mask_image(img: np.ndarray, mask_image: np.ndarray, color=None, scale: 
                     interpolation: str = 'area', alpha: float = 0.3, beta: float = 1, gamma: float = 0) -> np.ndarray:
     if color is None:
         color = [255, 255, 0]
+    color2=[255-c for c in color]
     result = img.copy()
     _mask_image = mask_image.copy()
-    if img.shape[:2] != _mask_image.shape[:2]:
+    shape = img.shape
+    if shape[:2] != _mask_image.shape[:2]:
         _mask_image = resize_img(
-            src=_mask_image, size=Size.from_cv2_shape(img.shape), interpolation_method=interpolation
+            src=_mask_image, size=Size.from_cv2_shape(shape), interpolation_method=interpolation
         )
     colored_mask = ((_mask_image.reshape(-1).reshape(1, -1).T * color)
-                    .reshape(_mask_image.shape[0], _mask_image.shape[1], 3)) / scale
+                    .reshape(shape[0], shape[1], 3)) / scale
     colored_mask = colored_mask.astype('uint8')
     cv2.addWeighted(src1=colored_mask, alpha=alpha, src2=result,
                     beta=beta, gamma=gamma, dst=result)
+    kernel = np.ones((3,3),np.uint8)
+    _mask_image2 = cv2.morphologyEx(_mask_image, cv2.MORPH_GRADIENT, kernel)
+    result[(_mask_image2==255)] = color2
+
     return result
 
 
