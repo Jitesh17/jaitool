@@ -1,7 +1,13 @@
 
 import copy
+# aug_visualizer = AugVisualizer(
+#         aug_vis_save_path="aug.png",
+#         wait=None
+#     )
+import os
 from typing import List, Tuple
 
+import cv2
 import imgaug as ia
 import numpy as np
 import printj
@@ -28,16 +34,16 @@ from jaitool.structures import (BBox, Keypoint2D, Keypoint2D_List, Polygon,
 from PIL import Image
 # from common_utils.utils import unflatten_list
 from pyjeasy.data_utils import unflatten_list
+from pyjeasy.file_utils import dir_contents_path_list_with_extension
 
 # from pasonatron.det2.util.augmentation.aug_utils import do_aug, custom_aug, smart_aug_getter, sometimes, bbox_based_aug_getter
 from .aug_visualizer import AugVisualizer
 
 # , aug_visualizer
 
-# aug_visualizer = AugVisualizer(
-#         aug_vis_save_path="aug.png",
-#         wait=None
-#     )
+
+def flatten(t):
+    return [item for sublist in t for item in sublist]
 
 
 def rarely(x): return iaa.Sometimes(0.10, x)
@@ -51,8 +57,9 @@ def always(x): return iaa.Sometimes(1.0, x)
 class AugmentedLoader(DatasetMapper):
     def __init__(self, cfg, train_type: str = 'kpt', aug=None,
                  aug_vis_save_path: bool = None, show_aug_seg: bool = True,
-                 aug_n_rows: int = 3, aug_n_cols: int = 5, 
+                 aug_n_rows: int = 3, aug_n_cols: int = 5,
                  aug_save_dims: Tuple[int] = (3 * 500, 5 * 500),
+                 background_images: str = None,
                  ):
         super().__init__(cfg)
         self.cfg = cfg
@@ -62,27 +69,65 @@ class AugmentedLoader(DatasetMapper):
         self.show_aug_seg = show_aug_seg
         self.aug_visualizer = AugVisualizer(
             aug_vis_save_path=self.aug_vis_save_path,
-            n_rows = aug_n_rows, 
-            n_cols = aug_n_cols, 
-            save_dims = aug_save_dims,
+            n_rows=aug_n_rows,
+            n_cols=aug_n_cols,
+            save_dims=aug_save_dims,
             wait=None
         )
+        self.background_images = []
+        for bg_dir in background_images:
+            self.background_images += dir_contents_path_list_with_extension(
+                dirpath=bg_dir,
+                extension=['.jpg', '.jpeg', '.png'])
+        self.num_background_images = len(self.background_images)
+        self.background_image_dict = dict()
 
-    def get_bbox_list(self, ann_dict: Detectron2_Annotation_Dict) -> List[BBox]:
-        return [ann.bbox for ann in ann_dict.annotations]
+    # def get_bbox_list(self, ann_dict: Detectron2_Annotation_Dict) -> List[BBox]:
+    #     return [ann.bbox for ann in ann_dict.annotations]
 
     def mapper(self, dataset_dict, train_type: str = 'kpt'):
         if train_type != 'kpt':
             for item in dataset_dict["annotations"]:
                 if 'keypoints' in item:
                     del item['keypoints']
+        img_path = os.path.join(
+            dataset_dict["coco_url"], dataset_dict["file_name"])
+        image = cv2.imread(img_path, flags=cv2.IMREAD_UNCHANGED)
+        fw, fh = image.shape[:2]
+        bg_idx = np.random.randint(0, self.num_background_images)
+        if bg_idx in self.background_image_dict:
+            bg_img = self.background_image_dict[bg_idx]
+            # printj.blue.bold_on_white("background from hash table")
+        else:
+            bg_img = cv2.imread(self.background_images[bg_idx])
+            bw, bh = bg_img.shape[:2]
+            if fw < bw and fh < bh:
+                bg_img = bg_img[0:fw, 0:fh]
+            else:
+                bg_img = cv2.resize(bg_img, (fw, fh))
+            self.background_image_dict[bg_idx] = bg_img
 
-        image = utils.read_image(dataset_dict["file_name"], format="BGR")
-        img_h, img_w = image.shape[:2]
-        num_pixels = img_w * img_h
+        # path_split = dataset_dict["file_name"].split("/")
+        # path_split_mask = path_split[:-2] + \
+        #     ["coco_data_mask", path_split[-1]]
+        # # printj.cyan(f'{path_split_mask=}')
+        # mask_path = "/".join(path_split_mask)
+        # # print(f"{mask_path=}")
+        # # mask = utils.read_image(mask_path, format="BGR")
+        # mask = cv2.imread(mask_path)
+        mask = image[:, :, 3]
+        mask3 = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+        image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
+        image = mask3//255*image + (1-mask3//255)*bg_img
+        m1 = cv2.hconcat([image, mask3])
+
+        # image = utils.read_image(dataset_dict["file_name"], format="BGR")
+        # img_h, img_w = image.shape[:2]
+        # num_pixels = img_w * img_h
 
         ann_dict = Detectron2_Annotation_Dict.from_dict(dataset_dict)
-        bbox_list = [ann.bbox for ann in ann_dict.annotations]
+        # printj.red(ann_dict)
+        # bbox_list = [ann.bbox for ann in ann_dict.annotations]
         # if train_type == 'seg':
         #     printj.purple(len(ann_dict.annotations))
         #     for ann in ann_dict.annotations:
@@ -91,9 +136,66 @@ class AugmentedLoader(DatasetMapper):
         #     tranformed = self.aug(mask=mask)
         #     mask = tranformed['mask']
         #     image = tranformed['image']
-            
+
         # else:
-        image = self.aug(image=np.array(image))['image']
+        # if train_type == 'seg':
+        # if True:
+
+        polygon_length = 0
+        while polygon_length < 6:
+            tranform = self.aug(image=np.array(image), mask=mask)
+            image = tranform['image']
+            mask = tranform['mask']
+
+            ret, thresh = cv2.threshold(np.array(mask), 127, 255, 0)
+            contours, hierarchy = cv2.findContours(
+                thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            x = [c[0][0] for c in flatten(contours)]
+            y = [c[0][1] for c in flatten(contours)]
+            xmin = min(x)
+            ymin = min(y)
+            xmax = max(x)
+            ymax = max(y)
+            bbox = BBox(xmin, ymin, xmax, ymax)
+
+            seg = [flatten(flatten(c)) for c in contours]
+            polygon_length = min([len(segi) for segi in seg])
+
+        for ann in ann_dict.annotations:
+            ann.segmentation = Segmentation.from_list(seg)
+            ann.bbox = bbox
+
+        image2 = image.copy()
+        cv2.rectangle(image2, (xmin, ymin), (xmax, ymax), [222, 111, 222], 2)
+        for xi, yi in zip(x, y):
+            image2 = cv2.circle(image2, (xi, yi), radius=1,
+                                color=(0, 0, 255), thickness=-1)
+        mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+        m2 = cv2.hconcat([image2, mask])
+        m0 = cv2.vconcat([m1, m2])
+
+        # from pyjeasy.image_utils import show_image
+        # show_image(m0, "a", window_width=1100)
+        # cv2.fillPoly(image, pts=contours, color=(11, 255, 11))
+        # show_image(image)
+        # i=0
+        # debug_save = "debug/"
+        # import os
+        # while os.path.exists(debug_save+f"{i}.png"):
+        #     i += 1
+        # print(debug_save+f"{i}.png")
+        # # cv2.imwrite(debug_save+f"{i}.png", m0)
+
+        # for si, segi in enumerate(seg):
+        #     print(i, si, end=" ")
+        #     printj.cyan(f"{len(segi)=}")
+        #     if len(segi)<8:
+        #         printj.red.bold_on_white(f"{len(segi)=}")
+        #         print(f"{segi}")
+        # else:
+        #     tranform = self.aug(image=np.array(image))
+        #     image = tranform['image']
+        '''
         seq_aug_for_no_seg = almost_always(iaa.Sequential(
             [
                 # iaa.Rot90(ia.ALL, keep_size=False)
@@ -173,12 +275,22 @@ class AugmentedLoader(DatasetMapper):
             kpts_aug, demarcation=True) for kpts_aug in kpts_aug_list]
 
         if imgaug_polys_aug is not None and imgaug_bboxes_aug is None:
+            import printj
+            print()
+            print()
+            printj.yellow(imgaug_polys_aug)
+            print(len(imgaug_polys_aug))
+            print(imgaug_polys_aug.polygons)
+            printj.cyan(imgaug_polys_aug.polygons[0])
+            printj.cyan.on_green(Polygon.from_imgaug(imgaug_polys_aug.polygons[0]))
             poly_aug_list = [Polygon.from_imgaug(
                 imgaug_polygon) for imgaug_polygon in imgaug_polys_aug.polygons]
             poly_aug_list_list = unflatten_list(
                 poly_aug_list, part_sizes=seg_len_list)
+            printj.red.on_cyan(poly_aug_list_list)
             seg_aug_list = [Segmentation(poly_aug_list)
                             for poly_aug_list in poly_aug_list_list]
+            printj.red(seg_aug_list)
             bbox_aug_list = [seg_aug.to_bbox() for seg_aug in seg_aug_list]
             # Adjust BBoxes when Segmentation BBox does not contain all keypoints
             for i in range(len(bbox_aug_list)):
@@ -201,7 +313,7 @@ class AugmentedLoader(DatasetMapper):
         else:
             printj.red(f'Unexpected error')
             raise Exception
-
+        
         if num_kpts > 0:
             for ann, kpts_aug, bbox_aug, seg_aug in zip(ann_dict.annotations, kpts_aug_list, bbox_aug_list, seg_aug_list):
                 ann.keypoints = kpts_aug
@@ -214,6 +326,8 @@ class AugmentedLoader(DatasetMapper):
                 ann.bbox = bbox_aug
                 ann.segmentation = seg_aug if seg_aug is not None else Segmentation.from_list([
                 ])
+        '''
+        num_kpts = 0
 
         dataset_dict = ann_dict.to_dict()
 
@@ -248,14 +362,14 @@ class AugmentedLoader(DatasetMapper):
 
         return dataset_dict
 
-    def kpt_dataset_mapper(self, dataset_dict):
-        return self.mapper(dataset_dict, train_type='kpt')
+    # def kpt_dataset_mapper(self, dataset_dict):
+    #     return self.mapper(dataset_dict, train_type='kpt')
 
-    def seg_dataset_mapper(self, dataset_dict):
-        return self.mapper(dataset_dict, train_type='seg')
+    # def seg_dataset_mapper(self, dataset_dict):
+    #     return self.mapper(dataset_dict, train_type='seg')
 
-    def bbox_dataset_mapper(self, dataset_dict):
-        return self.mapper(dataset_dict, train_type='bbox')
+    # def bbox_dataset_mapper(self, dataset_dict):
+    #     return self.mapper(dataset_dict, train_type='bbox')
 
     def visualize_aug(self, dataset_dict: dict):
         image = dataset_dict["image"].cpu().numpy(
@@ -319,14 +433,16 @@ class AugmentedLoader(DatasetMapper):
         """
         # USER: Write your own image loading if it's not from a file
         if 'image' in dataset_dict:
-            image = dataset_dict["image"].cpu().numpy().transpose(1, 2, 0).astype('uint8')
+            image = dataset_dict["image"].cpu().numpy(
+            ).transpose(1, 2, 0).astype('uint8')
         else:
             image = utils.read_image(dataset_dict["file_name"], format="BGR")
         self.check_image_size(dataset_dict, image)
 
         # USER: Remove if you don't do semantic/panoptic segmentation.
         if "sem_seg_file_name" in dataset_dict:
-            sem_seg_gt = utils.read_image(dataset_dict.pop("sem_seg_file_name"), "L").squeeze(2)
+            sem_seg_gt = utils.read_image(dataset_dict.pop(
+                "sem_seg_file_name"), "L").squeeze(2)
         else:
             sem_seg_gt = None
 
@@ -338,9 +454,11 @@ class AugmentedLoader(DatasetMapper):
         # Pytorch's dataloader is efficient on torch.Tensor due to shared-memory,
         # but not efficient on large generic data structures due to the use of pickle & mp.Queue.
         # Therefore it's important to use torch.Tensor.
-        dataset_dict["image"] = torch.as_tensor(np.ascontiguousarray(image.transpose(2, 0, 1)))
+        dataset_dict["image"] = torch.as_tensor(
+            np.ascontiguousarray(image.transpose(2, 0, 1)))
         if sem_seg_gt is not None:
-            dataset_dict["sem_seg"] = torch.as_tensor(sem_seg_gt.astype("long"))
+            dataset_dict["sem_seg"] = torch.as_tensor(
+                sem_seg_gt.astype("long"))
 
         # USER: Remove if you don't use pre-computed proposals.
         # Most users would not need this feature.
@@ -386,11 +504,11 @@ class AugmentedLoader(DatasetMapper):
         return dataset_dict
 
     def __call__(self, dataset_dict) -> dict:
-        
-        result = copy.deepcopy(dataset_dict)  
-        
+
+        result = copy.deepcopy(dataset_dict)
+        # print(result)
         result = self.mapper(result, train_type=self.train_type)
-        result = self.det2_default_mapper(result)
+        # result = self.det2_default_mapper(result)
 
         self.visualize_aug(result)
         return result
