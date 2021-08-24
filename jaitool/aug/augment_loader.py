@@ -90,9 +90,7 @@ class AugmentedLoader(DatasetMapper):
             for item in dataset_dict["annotations"]:
                 if 'keypoints' in item:
                     del item['keypoints']
-        img_path = os.path.join(
-            dataset_dict["coco_url"], dataset_dict["file_name"])
-        image = cv2.imread(img_path, flags=cv2.IMREAD_UNCHANGED)
+        image = cv2.imread(dataset_dict["file_name"], flags=cv2.IMREAD_UNCHANGED)
         fw, fh = image.shape[:2]
         bg_idx = np.random.randint(0, self.num_background_images)
         if bg_idx in self.background_image_dict:
