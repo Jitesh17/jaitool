@@ -17,9 +17,9 @@ from printj import red as error
 
 def draw_bbox(
         img: np.ndarray, bbox: BBox,
-        color=None, font_face=0,thickness: int = 2, text: str = None, label_thickness: int = 0,
+        color=None, font_face=0,thickness: int = 4, text: str = None, label_thickness: int = None,
         label_color: list = None, show_bbox: bool = True, show_label: bool = True,
-        label_orientation: str = 'top', text_size: int = 0
+        label_orientation: str = 'top', text_size: int = None
 ) -> np.ndarray:
     if color is None:
         color = [50, 250, 50]
@@ -28,9 +28,9 @@ def draw_bbox(
     if type(bbox) == BBox:
         xmin, ymin, xmax, ymax = bbox.to_int().to_list()
     elif type(bbox) == tuple:
-        xmin, ymin, xmax, ymax = bbox
+        [xmin, ymin, xmax, ymax] = [int(x) for x in bbox]
     elif type(bbox) == list:
-        [xmin, ymin, xmax, ymax] = bbox
+        [xmin, ymin, xmax, ymax] =  [int(x) for x in bbox]
     else:
         raise TypeError
     if show_bbox:
@@ -58,20 +58,18 @@ def draw_bbox_text(img: np.ndarray, bbox: BBox, text: str, color=None,
     [textbox_w, textbox_h], _ = cv2.getTextSize(text=text, fontFace=font_face, fontScale=font_scale,
                                                 thickness=thickness)
     orientation = orientation.lower()
-    if text_size:
+    if text_size is not None:
         font_scale=text_size
         if orientation in ['top', 'bottom']:
             textbox_org_x = int(bbox.xmin)
             if orientation == 'top':
-                textbox_org_y = int(bbox.ymin + text_size +1)
+                textbox_org_y = int(bbox.ymin - 4*text_size )
             elif orientation == 'bottom':
                 textbox_org_y = int(bbox.ymax + 1)
             else:
                 raise Exception
         elif orientation in ['left', 'right']:
             font_scale = font_scale * (target_textbox_h / textbox_h)
-            [textbox_w, textbox_h], _ = cv2.getTextSize(text=text, fontFace=font_face, fontScale=font_scale,
-                                                        thickness=thickness)
             textbox_org_y = int(bbox.ymin)
             if orientation == 'left':
                 textbox_org_x = int(bbox.xmin +len(text)*text_size)

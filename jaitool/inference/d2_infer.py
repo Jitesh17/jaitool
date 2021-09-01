@@ -320,6 +320,8 @@ class D2Inferer:
                      transparent_mask: bool = True,
                      transparency_alpha: float = 0.3,
                      ignore_keypoint_idx=None,
+                    text_size: int = None,
+                    thickness: int = None,
                      show_legends: bool = False,
                      # gt_path: str = None,
                      ) -> np.ndarray:
@@ -335,6 +337,8 @@ class D2Inferer:
             color_bbox=color_bbox,
             transparent_mask=transparent_mask, transparency_alpha=transparency_alpha,
             ignore_keypoint_idx=ignore_keypoint_idx,
+            text_size=text_size,
+            thickness=thickness,
             show_legends=show_legends
             # gt_path=gt_path
         )
@@ -432,6 +436,8 @@ class D2Inferer:
                     transparent_mask: bool = True,
                     transparency_alpha: float = 0.3,
                     ignore_keypoint_idx=None,
+                    text_size: int = None,
+                    thickness: int = None,
                     show_legends: bool = False,
                     # gt_path: str = None,
                     ) -> np.ndarray:
@@ -476,14 +482,14 @@ class D2Inferer:
         output = self.draw_infer(show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label,
                                  show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask,
                                  transparency_alpha, ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list,
-                                 pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list, show_legends)
+                                 pred_masks_list, pred_keypoints_list, vis_keypoints_list, kpt_confidences_list, text_size, thickness, show_legends)
 
         return output
 
     def draw_infer(self, show_max_score_only, show_class_label, show_class_label_score_only, show_keypoint_label,
                    show_bbox, show_keypoints, show_segmentation, color_bbox, transparent_mask, transparency_alpha,
                    ignore_keypoint_idx, output, score_list, bbox_list, pred_class_list, pred_masks_list, pred_keypoints_list,
-                   vis_keypoints_list, kpt_confidences_list, show_legends=False):
+                   vis_keypoints_list, kpt_confidences_list, text_size, thickness, show_legends=False):
         if self.gt_path is None:
             self.img_id_without_gt = next(self.counter)
         max_score_list = dict()
@@ -575,18 +581,18 @@ class D2Inferer:
                                     "kpt_confidences": kpt_confidences,
                                 }
                 else:
-                    thickness = 3
+                    # thickness = 3
                     if mask is not None and show_segmentation:
                         output = draw_mask_bool(img=output, mask_bool=mask, color=_color_bbox, transparent=transparent_mask,
                                                 alpha=transparency_alpha)
                     if show_class_label_score_only:
                         output = draw_bbox(img=output, bbox=bbox, color=_color_bbox, thickness=thickness,
-                                           show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
+                                           show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}', text_size=text_size)
                     else:
                         output = draw_bbox(img=output, bbox=bbox, color=_color_bbox, thickness=thickness,
-                                           show_bbox=show_bbox, show_label=show_class_label, text=f'{pred_class}', label_orientation='right')
-                        output = draw_bbox(img=output, bbox=bbox, color=_color_bbox, thickness=thickness,
-                                           show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}')
+                                           show_bbox=show_bbox, show_label=show_class_label, text=f'{pred_class} {round(score, 2)}', label_orientation='top', text_size=text_size)
+                        # output = draw_bbox(img=output, bbox=bbox, color=_color_bbox, thickness=thickness,
+                        #                    show_bbox=show_bbox, show_label=show_class_label, text=f'{round(score, 2)}', text_size=text_size)
                     if keypoints is not None and show_keypoints:
                         output = draw_keypoints(img=output, keypoints=keypoints, show_keypoints=show_keypoints,
                                                 keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
@@ -629,7 +635,7 @@ class D2Inferer:
                             output = draw_mask_bool(img=output, mask_bool=max_pred["mask"], color=_color_bbox, transparent=transparent_mask,
                                                     alpha=transparency_alpha)
                         output = draw_bbox(img=output, bbox=max_pred["bbox"],
-                                           show_bbox=show_bbox, show_label=show_class_label, text=f'{max_pred["pred_class"]} {round(max_pred["score"], 2)}')
+                                           show_bbox=show_bbox, show_label=show_class_label, text=f'{max_pred["pred_class"]} {round(max_pred["score"], 2)}', text_size=text_size, thickness=thickness)
                         if max_pred["keypoints"] is not None and show_keypoints:
                             output = draw_keypoints(img=output, keypoints=max_pred["keypoints"], show_keypoints=show_keypoints,
                                                     keypoint_labels=self.keypoint_names, show_keypoints_labels=show_keypoint_label,
@@ -700,6 +706,8 @@ class D2Inferer:
               output_type: Union[str, int],
               input_path: Union[str, List[str]],
               output_path: Union[str, List[str]],
+              text_size: int = None,
+              thickness: int = None,
               show_max_score_only: bool = False,
               show_class_label: bool = True,
               show_class_label_score_only: bool = False,
@@ -754,11 +762,13 @@ class D2Inferer:
                                 show_max_score_only=show_max_score_only,
                                 show_class_label=show_class_label,
                                 show_class_label_score_only=show_class_label_score_only,
+                                thickness=thickness,
                                 show_keypoint_label=show_keypoint_label,
                                 show_bbox=show_bbox, show_keypoints=show_keypoints, show_segmentation=show_segmentation,
                                 color_bbox=color_bbox,
                                 transparent_mask=transparent_mask, transparency_alpha=transparency_alpha,
                                 ignore_keypoint_idx=ignore_keypoint_idx,
+                                text_size=text_size,
                                 show_legends=show_legends
                                 # gt_path=gt_path,
                                 )
@@ -887,7 +897,7 @@ class D2Inferer:
                     gt_bbox = BBox.from_list(
                         bbox=ann["bbox"], input_format='pminsize')
                     output = draw_bbox(img=output, bbox=gt_bbox,
-                                       show_bbox=True, show_label=False, color=[0, 0, 255], thickness=2)
+                                       show_bbox=True, show_label=False, color=[0, 0, 255], thickness=2, text_size=1)
                     row['bbox_width'] = ann["bbox"][2]
                     row['bbox_height'] = ann["bbox"][3]
                     row['bbox_area_default'] = ann["area"]
