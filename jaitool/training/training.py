@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-from detectron2.utils.events import (CommonMetricPrinter, JSONWriter,
-                                     TensorboardXWriter)
 import copy
+import itertools
 import json
 import logging
 import os
 import random
 import sys
 import weakref
+from asyncio import tasks
 from datetime import datetime
 from functools import partial
 from sys import exit as x
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, OrderedDict, Tuple, Union
 
 import albumentations as A
 import cv2
@@ -31,11 +31,15 @@ from detectron2.data import detection_utils as utils
 from detectron2.data import transforms as T
 from detectron2.data.datasets import register_coco_instances
 from detectron2.engine import (DefaultPredictor, DefaultTrainer,
-                               create_ddp_model)
+                               create_ddp_model, hooks)
 from detectron2.engine.train_loop import AMPTrainer, SimpleTrainer, TrainerBase
-from detectron2.evaluation import COCOEvaluator
+from detectron2.evaluation import (COCOEvaluator, DatasetEvaluator,
+                                   inference_on_dataset, print_csv_format,
+                                   verify_results)
 from detectron2.utils import comm
-from detectron2.utils.logger import setup_logger
+from detectron2.utils.events import (CommonMetricPrinter, JSONWriter,
+                                     TensorboardXWriter)
+from detectron2.utils.logger import create_small_table, setup_logger
 from jaitool.aug.augment import get_augmentation
 from jaitool.aug.augment_loader import AugmentedLoader
 from jaitool.draw import draw_bbox, draw_keypoints, draw_mask_bool
@@ -48,6 +52,7 @@ from pyjeasy.file_utils import (delete_dir, delete_dir_if_exists, dir_exists,
                                 make_dir_if_not_exists)
 from pyjeasy.image_utils import show_image
 from shapely.geometry import Polygon
+from tabulate import tabulate
 from tqdm import tqdm
 
 
@@ -90,7 +95,8 @@ class D2Trainer:
             val_eval_period: int = 100,
             vis_period: int = 0,
             train_type: str = None,
-            background_images: str=None,
+            bg_dirs: str=None,
+            eval_tasks: str = None,
     ):
         """
         D2Trainer
@@ -295,7 +301,8 @@ class D2Trainer:
         self.aug_n_rows = aug_n_rows
         self.aug_n_cols = aug_n_cols
         self.aug_save_dims = aug_save_dims
-        self.background_images = background_images
+        self.bg_dirs = bg_dirs
+        self.eval_tasks = eval_tasks
 
     def train(self):
         if self.val_on:
@@ -312,7 +319,8 @@ class D2Trainer:
                 aug_save_dims=self.aug_save_dims,
                 img_path=self.img_path,
                 val_img_path=self.val_img_path,
-                background_images=self.background_images,
+                bg_dirs=self.bg_dirs,
+                eval_tasks=self.eval_tasks,
             )
         else:
             self.trainer = Trainer(
@@ -388,12 +396,14 @@ class ValTrainer(DefaultTrainer, TrainerBase):
             aug_save_dims: Tuple[int] = (3 * 500, 5 * 500),
             img_path: str = '',
             val_img_path: str = '',
-            background_images: str = None,
+            bg_dirs: str = None,
+            eval_tasks: str = None,
     ):
         """
         Args:
             cfg (CfgNode):
         """
+        self.eval_tasks = eval_tasks
         aug_seq = None
         if aug_on:
             aug_seq = get_augmentation(load_path=aug_settings_file_path)
@@ -433,7 +443,7 @@ class ValTrainer(DefaultTrainer, TrainerBase):
             show_aug_seg=show_aug_seg,
             aug_n_rows=aug_n_rows, aug_n_cols=aug_n_cols,
             aug_save_dims=aug_save_dims,
-            background_images=background_images)
+            bg_dirs=bg_dirs)
         printj.cyan(f"{aug_on=}")
         printj.cyan(f"{data_loader=}")
         model = create_ddp_model(model, broadcast_buffers=False)
@@ -475,7 +485,7 @@ class ValTrainer(DefaultTrainer, TrainerBase):
         show_aug_seg: bool = False,
         aug_n_rows: int = 3, aug_n_cols: int = 5,
         aug_save_dims: Tuple[int] = (3 * 500, 5 * 500),
-        background_images: str = None,
+        bg_dirs: str = None,
     ):
         if aug_on:
             # for i in range(100):
@@ -486,7 +496,7 @@ class ValTrainer(DefaultTrainer, TrainerBase):
             aug_loader = AugmentedLoader(cfg=cfg, train_type=train_type, aug=aug_seq,
                                          aug_vis_save_path=aug_vis_save_path, show_aug_seg=show_aug_seg,
                                          aug_n_rows=aug_n_rows, aug_n_cols=aug_n_cols,
-                                         aug_save_dims=aug_save_dims, background_images=background_images,
+                                         aug_save_dims=aug_save_dims, bg_dirs=bg_dirs,
                                          )
             return build_detection_train_loader(cfg, mapper=aug_loader)
         if not aug_on:
@@ -495,23 +505,132 @@ class ValTrainer(DefaultTrainer, TrainerBase):
             return build_detection_train_loader(cfg)
 
     @classmethod
-    def build_evaluator(cls, cfg, dataset_name, output_folder=None):
+    def build_evaluator(cls, cfg, dataset_name, eval_tasks=None, output_folder=None):
         if output_folder is None:
             output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
-        return COCOEvaluator(dataset_name, cfg, True, output_folder)
+        return CustomCOCOEvaluator(dataset_name, eval_tasks, True, output_folder, use_fast_impl=False)
 
     def build_hooks(self):
-        hooks = super().build_hooks()
-        hooks.insert(-1, LossEvalHook(
-            self.cfg.TEST.EVAL_PERIOD,
-            self.model,
-            build_detection_test_loader(
-                self.cfg,
-                self.cfg.DATASETS.TEST[0],
-                DatasetMapper(self.cfg, True)
+        """
+        Build a list of default hooks, including timing, evaluation,
+        checkpointing, lr scheduling, precise BN, writing events.
+
+        Returns:
+            list[HookBase]:
+        """
+        cfg = self.cfg.clone()
+        cfg.defrost()
+        cfg.DATALOADER.NUM_WORKERS = 0  # save some memory and time for PreciseBN
+
+        ret = [
+            hooks.IterationTimer(),
+            hooks.LRScheduler(),
+            hooks.PreciseBN(
+                # Run at the same freq as (but before) evaluation.
+                cfg.TEST.EVAL_PERIOD,
+                self.model,
+                # Build a new data loader to not affect training
+                self.build_train_loader(cfg),
+                cfg.TEST.PRECISE_BN.NUM_ITER,
             )
-        ))
-        return hooks
+            if cfg.TEST.PRECISE_BN.ENABLED and get_bn_modules(self.model)
+            else None,
+        ]
+
+        # Do PreciseBN before checkpointer, because it updates the model and need to
+        # be saved by checkpointer.
+        # This is not always the best: if checkpointing has a different frequency,
+        # some checkpoints may have more precise statistics than others.
+        if comm.is_main_process():
+            ret.append(hooks.PeriodicCheckpointer(self.checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD))
+
+        def test_and_save_results():
+            self._last_eval_results = self.test(self.cfg, self.model, self.eval_tasks)
+            return self._last_eval_results
+
+        # Do evaluation after checkpointer, because then if it fails,
+        # we can use the saved checkpoint to debug.
+        ret.append(hooks.EvalHook(cfg.TEST.EVAL_PERIOD, test_and_save_results))
+
+        if comm.is_main_process():
+            # Here the default print/log frequency of each writer is used.
+            # run writers in the end, so that evaluation metrics are written
+            ret.append(hooks.PeriodicWriter(self.build_writers(), period=20))
+        
+        # ret.insert(-1, LossEvalHook(
+        #     self.cfg.TEST.EVAL_PERIOD,
+        #     self.model,
+        #     build_detection_test_loader(
+        #         self.cfg,
+        #         self.cfg.DATASETS.TEST[0],
+        #         DatasetMapper(self.cfg, True)
+        #     )
+        # ))
+        return ret
+    # def build_hooks(self):
+    #     hooks = super().build_hooks()
+    #     hooks.insert(-1, LossEvalHook(
+    #         self.cfg.TEST.EVAL_PERIOD,
+    #         self.model,
+    #         build_detection_test_loader(
+    #             self.cfg,
+    #             self.cfg.DATASETS.TEST[0],
+    #             DatasetMapper(self.cfg, True)
+    #         )
+    #     ))
+    #     return hooks
+    @classmethod
+    def test(cls, cfg, model, eval_tasks, evaluators=None):
+        """
+        Args:
+            cfg (CfgNode):
+            model (nn.Module):
+            evaluators (list[DatasetEvaluator] or None): if None, will call
+                :meth:`build_evaluator`. Otherwise, must have the same length as
+                ``cfg.DATASETS.TEST``.
+
+        Returns:
+            dict: a dict of result metrics
+        """
+        logger = logging.getLogger(__name__)
+        if isinstance(evaluators, DatasetEvaluator):
+            evaluators = [evaluators]
+        if evaluators is not None:
+            assert len(cfg.DATASETS.TEST) == len(evaluators), "{} != {}".format(
+                len(cfg.DATASETS.TEST), len(evaluators)
+            )
+
+        results = OrderedDict()
+        for idx, dataset_name in enumerate(cfg.DATASETS.TEST):
+            data_loader = cls.build_test_loader(cfg, dataset_name)
+            # When evaluators are passed in as arguments,
+            # implicitly assume that evaluators can be created before data_loader.
+            if evaluators is not None:
+                evaluator = evaluators[idx]
+            else:
+                try:
+                    evaluator = cls.build_evaluator(cfg, dataset_name, eval_tasks)
+                except NotImplementedError:
+                    logger.warn(
+                        "No evaluator found. Use `DefaultTrainer.test(evaluators=)`, "
+                        "or implement its `build_evaluator` method."
+                    )
+                    results[dataset_name] = {}
+                    continue
+            results_i = inference_on_dataset(model, data_loader, evaluator)
+            results[dataset_name] = results_i
+            if comm.is_main_process():
+                assert isinstance(
+                    results_i, dict
+                ), "Evaluator must return a dict on the main process. Got {} instead.".format(
+                    results_i
+                )
+                logger.info("Evaluation results for {} in csv format:".format(dataset_name))
+                print_csv_format(results_i)
+
+        if len(results) == 1:
+            results = list(results.values())[0]
+        return results
 
     def build_writers(self):
         """
@@ -629,6 +748,134 @@ class CustomTensorboardXWriter(TensorboardXWriter):
             {'hparam/accuracy': -1, 'hparam/loss': -1})
 
         self._last_write = -1
+
+
+class CustomCOCOEvaluator(COCOEvaluator):
+    """
+    Evaluate AR for object proposals, AP for instance detection/segmentation, AP
+    for keypoint detection outputs using COCO's metrics.
+    See http://cocodataset.org/#detection-eval and
+    http://cocodataset.org/#keypoints-eval to understand its metrics.
+    The metrics range from 0 to 100 (instead of 0 to 1), where a -1 or NaN means
+    the metric cannot be computed (e.g. due to no predictions made).
+
+    In addition to COCO, this evaluator is able to support any bounding box detection,
+    instance segmentation, or keypoint detection dataset.
+    """
+
+    def __init__(
+        self,
+        dataset_name,
+        tasks=None,
+        distributed=True,
+        output_dir=None,
+        *,
+        use_fast_impl=True,
+        kpt_oks_sigmas=(),
+    ):
+        super(CustomCOCOEvaluator, self).__init__(dataset_name,
+        tasks,
+        distributed,
+        output_dir,
+        use_fast_impl=use_fast_impl,
+        kpt_oks_sigmas=kpt_oks_sigmas)
+
+    def _derive_coco_results(self, coco_eval, iou_type, class_names=None):
+        """
+        Derive the desired score numbers from summarized COCOeval.
+
+        Args:
+            coco_eval (None or COCOEval): None represents no predictions from model.
+            iou_type (str):
+            class_names (None or list[str]): if provided, will use it to predict
+                per-category AP.
+
+        Returns:
+            a dict of {metric name: score}
+        """
+
+        metrics = {
+            "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR", "AR50", "AR75", "ARs", "ARm", "ARl"],
+            "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR", "AR50", "AR75", "ARs", "ARm", "ARl"],
+            "keypoints": ["AP", "AP50", "AP75", "APm", "APl", "AR", "AR50", "AR75", "ARm", "ARl"],
+        }[iou_type]
+
+        if coco_eval is None:
+            self._logger.warn("No predictions from the model!")
+            return {metric: float("nan") for metric in metrics}
+
+        # the standard metrics
+        results = {
+            metric: float(coco_eval.stats[idx] * 100 if coco_eval.stats[idx] >= 0 else "nan")
+            for idx, metric in enumerate(metrics)
+        }
+        self._logger.info(
+            "Evaluation results for {}: \n".format(iou_type) + create_small_table(results)
+        )
+        if not np.isfinite(sum(results.values())):
+            self._logger.info("Some metrics cannot be computed and is shown as NaN.")
+
+        if class_names is None or len(class_names) <= 1:
+            return results
+        # Compute per-category AP
+        # from https://github.com/facebookresearch/Detectron/blob/a6a835f5b8208c45d0dce217ce9bbda915f44df7/detectron/datasets/json_dataset_evaluator.py#L222-L252 # noqa
+        precisions = coco_eval.eval["precision"]
+        # precision has dims (iou, recall, cls, area range, max dets)
+        assert len(class_names) == precisions.shape[2]
+
+        results_per_category = []
+        for idx, name in enumerate(class_names):
+            # area range index 0: all area ranges
+            # max dets index -1: typically 100 per image
+            precision = precisions[:, :, idx, 0, -1]
+            precision = precision[precision > -1]
+            ap = np.mean(precision) if precision.size else float("nan")
+            results_per_category.append(("{}".format(name), float(ap * 100)))
+
+        # tabulate it
+        N_COLS = min(6, len(results_per_category) * 2)
+        results_flatten = list(itertools.chain(*results_per_category))
+        results_2d = itertools.zip_longest(*[results_flatten[i::N_COLS] for i in range(N_COLS)])
+        table = tabulate(
+            results_2d,
+            tablefmt="pipe",
+            floatfmt=".3f",
+            headers=["category", "AP"] * (N_COLS // 2),
+            numalign="left",
+        )
+        self._logger.info("Per-category {} AP: \n".format(iou_type) + table)
+
+        results.update({"AP-" + name: ap for name, ap in results_per_category})
+        # recalls ---------------------------------
+        recalls = coco_eval.eval["recall"]
+        # recall has dims (iou, recall, cls, area range, max dets)
+        assert len(class_names) == recalls.shape[1]
+
+        results_per_category = []
+        for idx, name in enumerate(class_names):
+            # area range index 0: all area ranges
+            # max dets index -1: typically 100 per image
+            recall = recalls[:, idx, 0, -1]
+            recall = recall[recall > -1]
+            ar = np.mean(recall) if recall.size else float("nan")
+            results_per_category.append(("{}".format(name), float(ar * 100)))
+
+        # tabulate it
+        N_COLS = min(6, len(results_per_category) * 2)
+        results_flatten = list(itertools.chain(*results_per_category))
+        results_2d = itertools.zip_longest(
+            *[results_flatten[i::N_COLS] for i in range(N_COLS)])
+        table = tabulate(
+            results_2d,
+            tablefmt="pipe",
+            floatfmt=".3f",
+            headers=["category", "AR"] * (N_COLS // 2),
+            numalign="left",
+        )
+        self._logger.info("Per-category {} AR: \n".format(iou_type) + table)
+
+        results.update({"AR-" + name: ar for name, ar in results_per_category})
+        return results
 # def train(path, coco_ann_path, img_path, output_dir_path, resume=True,
 #     model = "COCO-Detection/faster_rcnn_R_50_FPN_1x.yaml"):
 #     register_coco_instances(

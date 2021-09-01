@@ -58,19 +58,23 @@ def visualize_coco_ann(
         data = json.load(json_file)
     for image in data["images"]:
         img_id = image["id"]
+        img = cv2.imread(f'{path}/{image["file_name"].split("/")[-1]}')
         for ann in data["annotations"]:
             if ann["image_id"]==img_id:
                 segmentations = ann['segmentation']
                 mask = annotation2binarymask(segmentations, image["height"], image["width"])
                 # show_image(mask)
-                img = cv2.imread(f'{path}/{image["file_name"].split("/")[-1]}')
                 # show_image(img)
-                img_seg = draw_mask_image(img, mask, )
+                img = draw_mask_image(img, mask, )
 
                 bbox = BBox.from_list(ann["bbox"], 'pminsize')
-                img_seg = draw_bbox(img_seg, bbox, )
-                if show_image_preview:
-                    show_image(img_seg)
+                img = draw_bbox(img, bbox, )
+                for cat in data["categories"]:
+                    if ann["category_id"] == cat["id"]:
+                        img = cv2.putText(img, cat["name"], (bbox.xmin, bbox.ymin), fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+                            fontScale=1, color=(255, 0, 0), thickness=2, lineType=cv2.LINE_AA, )
+        if show_image_preview:
+            show_image(img)
                 
 if __name__ == "__main__":
 

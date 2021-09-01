@@ -1,11 +1,63 @@
 
 import albumentations as A
+import printj, cv2
 
+# from pyjeasy.image_utils import show_image
+
+
+# def flatten(t): return [item for sublist in t for item in sublist]
+
+
+# def get_ann(img, mask):
+#     ret, thresh = cv2.threshold(mask, 127, 255, 0)
+#     contours, hierarchy = cv2.findContours(
+#         thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+#     seg = [flatten(flatten(c)) for c in contours]
+#     x = [c[0][0] for c in flatten(contours)]
+#     y = [c[0][1] for c in flatten(contours)]
+#     xmin = min(x)
+#     ymin = min(y)
+#     xmax = max(x)
+#     ymax = max(y)
+#     bbox = [xmin, ymin, xmax, ymax]
+
+#     cv2.rectangle(img, (xmin, ymin), (xmax, ymax), [222, 111, 222], 2)
+#     for xi, yi in zip(x, y):
+#         img = cv2.circle(img, (xi, yi), radius=1,
+#                          color=(0, 0, 255), thickness=-1)
+#     cv2.fillPoly(img, pts=contours, color=(11, 255, 11))
+
+#     return img, seg, bbox
 
 def get_augmentation(save_path=None, load_path=None):
-        if load_path:
-            return A.load(load_path)
+        if load_path is not None:
+            aug_seq=A.load(load_path)
+
+            # printj.red.bold_on_green("00000000000000000000000000000000")
+            # img1 = cv2.imread(
+            #     "/home/jitesh/prj/belt-hook/data/training_data/8/coco_data_out/rgb_0010.png")
+            # mask1 = cv2.imread(
+            #     "/home/jitesh/prj/belt-hook/data/training_data/8/coco_data_mask/rgb_0010.png", 0)
+
+            # print(img1.shape)
+            # print(mask1.shape)
+
+            # oo=cv2.hconcat([img1, cv2.cvtColor(mask1.copy(),cv2.COLOR_GRAY2RGB)])
+
+            # get_ann(img1.copy(), mask1.copy())
+            # for i in range(50):
+            #     a = aug_seq(image=img1.copy(), mask=mask1.copy())
+            #     img2 = a["image"]
+            #     mask2 = a["mask"]
+            #     img, seg, bbox = get_ann(img2, mask2)
+            #     ooo=cv2.hconcat([img2, cv2.cvtColor(mask2.copy(),cv2.COLOR_GRAY2RGB)])
+            #     o=cv2.vconcat([oo, ooo])
+            #     show_image(o, "", 1111)
+            return aug_seq
         else:
+            # print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+            return
             aug_seq1 = A.OneOf([
                 A.Rotate(limit=(-90, 90), p=1.0),
                 A.Flip(p=1.0),
@@ -37,7 +89,7 @@ def get_augmentation(save_path=None, load_path=None):
             ], p=1.0)
             aug_seq = A.Compose([
                 # A.Resize(self.img_size, self.img_size),
-                # aug_seq1,
+                aug_seq1,
                 aug_seq2,
                 aug_seq3,
                 aug_seq4,

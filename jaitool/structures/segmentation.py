@@ -25,6 +25,9 @@ from imgaug.augmentables.polys import Polygon as ImgAugPolygon, PolygonsOnImage 
 # from .keypoint import Keypoint2D, Keypoint3D
 # from .bbox import BBox
 
+def get_class_string(cls_obj) -> str:
+    return str(type(cls_obj)).replace("<class '", "").replace("'>", "").split('.')[-1]
+
 
 class Polygon:
     def __init__(self, points: list, dimensionality: int = 2):
@@ -48,6 +51,7 @@ class Polygon:
             # printj.red(f"len(self.points) is not divisible by self.dimensionality={self.dimensionality}")
             raise Exception
 #
+
     def __len__(self) -> int:
         return len(self.points) // self.dimensionality
 #
@@ -138,6 +142,7 @@ class Polygon:
 #         else:
 #             return NotImplemented
 #
+
     @classmethod
     def buffer(self, polygon: Polygon) -> Polygon:
         return polygon
@@ -148,24 +153,29 @@ class Polygon:
     def to_int(self) -> Polygon:
         return Polygon(points=[int(val) for val in self.points], dimensionality=self.dimensionality)
 #
+
     def to_float(self) -> Polygon:
         return Polygon(points=[float(val) for val in self.points], dimensionality=self.dimensionality)
 #
+
     def to_list(self, demarcation: bool = False) -> list:
         if demarcation:
             return np.array(self.points).reshape(-1, self.dimensionality).tolist()
         else:
             return self.points
 #
+
     def to_point_list(self) -> list:
         return [Point(coords=coords) for coords in self.to_list(demarcation=True)]
 
     def to_shapely(self) -> ShapelyPolygon:
         return ShapelyPolygon(self.to_list(demarcation=True))
 #
+
     def to_contour(self) -> np.ndarray:
         return np.array(self.to_int().to_list()).reshape(-1, 1, self.dimensionality)
 #
+
     def to_bbox(self) -> BBox:
         points = np.array(self.to_list(demarcation=True))
         xmin, ymin = points.min(axis=0)
@@ -226,6 +236,7 @@ class Polygon:
 #             new_point_list.append(new_point)
 #         return Polygon.from_point_list(point_list=new_point_list, dimensionality=2)
 #
+
     @classmethod
     def from_list(self, points: list, dimensionality: int = 2, demarcation: bool = False) -> Polygon:
         if demarcation:
@@ -247,6 +258,7 @@ class Polygon:
 #         polygons = list(polygonize(mls))
 #         return polygons[0]
 #
+
     @classmethod
     def from_shapely(self, shapely_polygon: ShapelyPolygon, fix_invalid: bool = False) -> Polygon:
         if not shapely_polygon.is_valid and fix_invalid:
@@ -328,12 +340,14 @@ class Polygon:
 #         union = cascaded_union([valid_polygon.to_shapely() for valid_polygon in valid_polygon_list])
 #         return self.from_shapely(union)
 #
+
     def to_imgaug(self) -> ImgAugPolygon:
         if self.dimensionality == 2:
             return ImgAugPolygon(self.to_list(demarcation=True))
         else:
             raise NotImplementedError
 #
+
     @classmethod
     def from_imgaug(cls, imgaug_polygon: ImgAugPolygon, fix_invalid: bool = False) -> Polygon:
         return Polygon.from_shapely(imgaug_polygon.to_shapely_polygon(), fix_invalid=fix_invalid)
@@ -345,6 +359,7 @@ class Polygon:
             raise TypeError
         return Point2D_List.from_list(self.to_list(demarcation=True))
 #
+
     @classmethod
     def from_point2d_list(cls, point2d_list: Point2D_List) -> Polygon:
         check_type(point2d_list, valid_type_list=[Point2D_List])
@@ -354,6 +369,7 @@ class Polygon:
             demarcation=True
         )
 #
+
     def to_point3d_list(self) -> Point3D_List:
         if self.dimensionality != 3:
             printj.red(
@@ -361,6 +377,7 @@ class Polygon:
             raise TypeError
         return Point3D_List.from_list(self.to_list(demarcation=True))
 #
+
     @classmethod
     def from_point3d_list(cls, point3d_list: Point3D_List) -> Polygon:
         check_type(point3d_list, valid_type_list=[Point3D_List])
@@ -371,6 +388,8 @@ class Polygon:
         )
 #
 #
+
+
 class Segmentation:
     def __init__(self, polygon_list: list = None):
         if polygon_list is not None:
@@ -385,6 +404,7 @@ class Segmentation:
         else:
             self.polygon_list = []
 #
+
     def __str__(self):
         return f"{get_class_string(self)}: {self.polygon_list}"
 
@@ -408,10 +428,12 @@ class Segmentation:
 #         check_type(value, valid_type_list=[Polygon])
 #         self.polygon_list[idx] = value
 #
+
     def __iter__(self):
         self.n = 0
         return self
 #
+
     def __next__(self) -> Polygon:
         if self.n < len(self.polygon_list):
             result = self.polygon_list[self.n]
@@ -484,6 +506,7 @@ class Segmentation:
 #     def to_float(self) -> Segmentation:
 #         return Segmentation([polygon.to_float() for polygon in self])
 #
+
     def to_list(self, demarcation: bool = False) -> list:
         return [polygon.to_list(demarcation=demarcation) for polygon in self]
 
@@ -493,22 +516,25 @@ class Segmentation:
     def to_shapely(self) -> list:
         return [polygon.to_shapely() for polygon in self]
 #
+
     def to_contour(self) -> list:  # combine?
         return [polygon.to_contour() for polygon in self]
 #
+
     def to_bbox(self) -> BBox:
         seg_bbox_list = [polygon.to_bbox() for polygon in self]
         seg_bbox_xmin = min([seg_bbox.xmin for seg_bbox in seg_bbox_list])
         seg_bbox_ymin = min([seg_bbox.ymin for seg_bbox in seg_bbox_list])
         seg_bbox_xmax = max([seg_bbox.xmax for seg_bbox in seg_bbox_list])
         seg_bbox_ymax = max([seg_bbox.ymax for seg_bbox in seg_bbox_list])
-        result_bbox = BBox(xmin=seg_bbox_xmin, ymin=seg_bbox_ymin, xmax=seg_bbox_xmax, ymax=seg_bbox_ymax).to_float()
+        result_bbox = BBox(xmin=seg_bbox_xmin, ymin=seg_bbox_ymin,
+                           xmax=seg_bbox_xmax, ymax=seg_bbox_ymax).to_float()
         return result_bbox
 
-    def to_mask(self, width: int, height: int) -> list: 
+    def to_mask(self, width: int, height: int) -> list:
         mask = np.zeros((width, height), np.uint8)
         contours = self.to_contour()
-        return cv2.drawContours(mask, contours, -1, (255,255,255),-1)
+        return cv2.drawContours(mask, contours, -1, (255, 255, 255), -1)
 #     def area(self) -> float:
 #         return sum([polygon.area() for polygon in self])
 #
@@ -573,6 +599,7 @@ class Segmentation:
 #             new_polygon_list.append(new_polygon)
 #         return Segmentation(polygon_list=new_polygon_list)
 #
+
     @classmethod
     def from_list(self, points_list: list, demarcation: bool = False) -> Segmentation:
         return Segmentation(
@@ -610,6 +637,7 @@ class Segmentation:
 #             ]
 #         )
 #
+
     @classmethod
     def from_contour(self, contour_list: list, exclude_invalid_polygons: bool = False) -> Segmentation:
         contour_list0 = contour_list.copy()
@@ -642,13 +670,15 @@ class Segmentation:
                           imgaug_polygons.polygons]
         )
 #
+
     def to_point2d_list_list(self) -> List[Point2D_List]:
         return [polygon.to_point2d_list() for polygon in self]
 
     @classmethod
     def from_point2d_list_list(cls, point2d_list_list: List[Point2D_List]) -> Segmentation:
         return Segmentation(
-            polygon_list=[Polygon.from_point2d_list(point2d_list) for point2d_list in point2d_list_list]
+            polygon_list=[Polygon.from_point2d_list(
+                point2d_list) for point2d_list in point2d_list_list]
         )
 #
 #     @classmethod

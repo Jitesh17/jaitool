@@ -11,7 +11,7 @@ import albumentations as A
 import cv2
 import numpy as np
 import printj
-from albumentations.augmentations.functional import rotate
+# from albumentations.augmentations.functional import rotate
 # from annotation_utils.coco.structs import COCO_Dataset
 # from annotation_utils.ndds.structs import NDDS_Dataset
 from pyjeasy.file_utils import (dir_contents_path_list_with_extension,
@@ -21,6 +21,15 @@ from pyjeasy.image_utils.preview import show_image
 from pyjeasy.image_utils import create_mask
 from tqdm import tqdm
 
+def replace_bg_wrt_transparency(
+    bg_dirs: list,
+    img_dir_name: str = "img",
+    output_img_dir_name: str = "img_",
+    aug_on: bool = False,
+    aug_json: str = None,
+    show_preview: bool = False,):
+
+    pass
 
 def aug_flip_and_rotate(load_path=None):
     if load_path:

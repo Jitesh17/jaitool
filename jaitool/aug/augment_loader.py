@@ -4,19 +4,20 @@ import copy
 #         aug_vis_save_path="aug.png",
 #         wait=None
 #     )
-import os
-from typing import List, Tuple
-
+# import os
+from typing import Tuple
+# from numba import jit
 import cv2
-import imgaug as ia
+# import imgaug as ia
 import numpy as np
+# from numpy.lib.function_base import iterable
 import printj
 import torch
 from detectron2.data import DatasetMapper
 from detectron2.data import detection_utils as utils
-from detectron2.data import transforms as T
+# from detectron2.data import transforms as T
 # from fvcore.common.file_io import PathManager
-from imgaug import augmenters as iaa
+# from imgaug import augmenters as iaa
 # from imgaug.augmentables.bbs import BoundingBoxesOnImage
 # from imgaug.augmentables.kps import KeypointsOnImage
 # from imgaug.augmentables.polys import PolygonsOnImage
@@ -29,7 +30,7 @@ from jaitool.annotation.DET2 import Detectron2_Annotation_Dict
 #                                            draw_keypoints, draw_segmentation)
 from jaitool.draw.drawing_utils import (draw_bbox, draw_keypoints,
                                         draw_mask_contour)
-from jaitool.structures import (BBox, Keypoint2D, Keypoint2D_List, Polygon,
+from jaitool.structures import (BBox, Keypoint2D_List, Polygon,
                                 Segmentation)
 # from PIL import Image
 # from common_utils.utils import unflatten_list
@@ -41,17 +42,16 @@ from .aug_visualizer import AugVisualizer
 
 # , aug_visualizer
 
-
 def flatten(t):
     return [item for sublist in t for item in sublist]
 
 
-def rarely(x): return iaa.Sometimes(0.10, x)
-def occasionally(x): return iaa.Sometimes(0.25, x)
-def sometimes(x): return iaa.Sometimes(0.5, x)
-def often(x): return iaa.Sometimes(0.75, x)
-def almost_always(x): return iaa.Sometimes(0.9, x)
-def always(x): return iaa.Sometimes(1.0, x)
+# def rarely(x): return iaa.Sometimes(0.10, x)
+# def occasionally(x): return iaa.Sometimes(0.25, x)
+# def sometimes(x): return iaa.Sometimes(0.5, x)
+# def often(x): return iaa.Sometimes(0.75, x)
+# def almost_always(x): return iaa.Sometimes(0.9, x)
+# def always(x): return iaa.Sometimes(1.0, x)
 
 
 class AugmentedLoader(DatasetMapper):
@@ -59,7 +59,7 @@ class AugmentedLoader(DatasetMapper):
                  aug_vis_save_path: bool = None, show_aug_seg: bool = True,
                  aug_n_rows: int = 3, aug_n_cols: int = 5,
                  aug_save_dims: Tuple[int] = (3 * 500, 5 * 500),
-                 background_images: str = None,
+                 bg_dirs: str = None,
                  ):
         super().__init__(cfg)
         self.cfg = cfg
@@ -74,13 +74,15 @@ class AugmentedLoader(DatasetMapper):
             save_dims=aug_save_dims,
             wait=None
         )
-        self.background_images = []
-        for bg_dir in background_images:
-            self.background_images += dir_contents_path_list_with_extension(
-                dirpath=bg_dir,
-                extension=['.jpg', '.jpeg', '.png'])
-        self.num_background_images = len(self.background_images)
-        self.background_image_dict = dict()
+        self.bg_dirs = bg_dirs
+        if self.bg_dirs is not None:
+            self.background_images = []
+            for bg_dir in self.bg_dirs:
+                self.background_images += dir_contents_path_list_with_extension(
+                    dirpath=bg_dir,
+                    extension=['.jpg', '.jpeg', '.png'])
+            self.num_background_images = len(self.background_images)
+            self.background_image_dict = dict()
 
     # def get_bbox_list(self, ann_dict: Detectron2_Annotation_Dict) -> List[BBox]:
     #     return [ann.bbox for ann in ann_dict.annotations]
@@ -90,40 +92,41 @@ class AugmentedLoader(DatasetMapper):
             for item in dataset_dict["annotations"]:
                 if 'keypoints' in item:
                     del item['keypoints']
-        image = cv2.imread(dataset_dict["file_name"], flags=cv2.IMREAD_UNCHANGED)
-        fw, fh = image.shape[:2]
-        bg_idx = np.random.randint(0, self.num_background_images)
-        if bg_idx in self.background_image_dict:
-            bg_img = self.background_image_dict[bg_idx]
-            # printj.blue.bold_on_white("background from hash table")
-        else:
-            bg_img = cv2.imread(self.background_images[bg_idx])
-            bw, bh = bg_img.shape[:2]
-            if fw < bw and fh < bh:
-                bg_img = bg_img[0:fw, 0:fh]
-            else:
-                bg_img = cv2.resize(bg_img, (fw, fh))
-            self.background_image_dict[bg_idx] = bg_img
-
-        # path_split = dataset_dict["file_name"].split("/")
-        # path_split_mask = path_split[:-2] + \
-        #     ["coco_data_mask", path_split[-1]]
-        # # printj.cyan(f'{path_split_mask=}')
-        # mask_path = "/".join(path_split_mask)
-        # # print(f"{mask_path=}")
-        # # mask = utils.read_image(mask_path, format="BGR")
-        # mask = cv2.imread(mask_path)
-        mask = image[:, :, 3]
-        mask3 = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
-        image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
-        image = mask3//255*image + (1-mask3//255)*bg_img
-        # m1 = cv2.hconcat([image, mask3])
-
-        # image = utils.read_image(dataset_dict["file_name"], format="BGR")
-        # img_h, img_w = image.shape[:2]
-        # num_pixels = img_w * img_h
-
+        # image = cv2.imread(dataset_dict["file_name"], flags=cv2.IMREAD_UNCHANGED)
+        
         ann_dict = Detectron2_Annotation_Dict.from_dict(dataset_dict)
+        
+        if train_type == 'seg':
+            seg, bbox, image = self.augment_image_mask(dataset_dict["file_name"])
+
+            for ann in ann_dict.annotations:
+                ann.segmentation = Segmentation.from_list(seg)
+                ann.bbox = bbox
+        if train_type == 'bbox':
+            # image = utils.read_image(dataset_dict["file_name"], format=self.image_format)
+            # utils.check_image_size(dataset_dict, image)
+            image = cv2.imread(dataset_dict["file_name"])
+            bboxes = []
+            class_labels = []
+            for ann in dataset_dict["annotations"]:
+                bboxes.append(ann['bbox'])
+                class_labels.append(ann['category_id'])
+            transforms = self.aug(image=image, bboxes=bboxes, class_labels=class_labels)
+            image = transforms['image']
+            transformed_bboxes = transforms['bboxes']
+            transformed_class_labels = transforms['class_labels']
+            # print(len(dataset_dict["annotations"]))
+            # print(len(transformed_bboxes))
+            # print((dataset_dict["annotations"]))
+            # print((transformed_bboxes))
+            # print()
+            for i, ann in enumerate(dataset_dict["annotations"]):
+                # print(dataset_dict["annotations"][i]['bbox'])
+                # print(transformed_bboxes[i])
+                dataset_dict["annotations"][i]['bbox'] = transformed_bboxes[i]
+                dataset_dict["annotations"][i]['category_id'] = transformed_class_labels[i]
+
+
         # printj.red(ann_dict)
         # bbox_list = [ann.bbox for ann in ann_dict.annotations]
         # if train_type == 'seg':
@@ -139,39 +142,17 @@ class AugmentedLoader(DatasetMapper):
         # if train_type == 'seg':
         # if True:
 
-        polygon_length = 0
-        while polygon_length < 6:
-            tranform = self.aug(image=np.array(image), mask=mask)
-            image = tranform['image']
-            mask = tranform['mask']
 
-            ret, thresh = cv2.threshold(np.array(mask), 127, 255, 0)
-            contours, hierarchy = cv2.findContours(
-                thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-            x = [c[0][0] for c in flatten(contours)]
-            y = [c[0][1] for c in flatten(contours)]
-            xmin = min(x)
-            ymin = min(y)
-            xmax = max(x)
-            ymax = max(y)
-            bbox = BBox(xmin, ymin, xmax, ymax)
-
-            seg = [flatten(flatten(c)) for c in contours]
-            polygon_length = min([len(segi) for segi in seg])
-
-        for ann in ann_dict.annotations:
-            ann.segmentation = Segmentation.from_list(seg)
-            ann.bbox = bbox
-
-        image2 = image.copy()
-        cv2.rectangle(image2, (xmin, ymin), (xmax, ymax), [222, 111, 222], 2)
-        for xi, yi in zip(x, y):
-            image2 = cv2.circle(image2, (xi, yi), radius=1,
-                                color=(0, 0, 255), thickness=-1)
-        mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+        """
+        # image2 = image.copy()
+        # cv2.rectangle(image2, (xmin, ymin), (xmax, ymax), [222, 111, 222], 2)
+        # for xi, yi in zip(x, y):
+        #     image2 = cv2.circle(image2, (xi, yi), radius=1,
+        #                         color=(0, 0, 255), thickness=-1)
+        # mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
         # m2 = cv2.hconcat([image2, mask])
         # m0 = cv2.vconcat([m1, m2])
-
+        """
         # from pyjeasy.image_utils import show_image
         # show_image(m0, "a", window_width=1100)
         # cv2.fillPoly(image, pts=contours, color=(11, 255, 11))
@@ -194,12 +175,12 @@ class AugmentedLoader(DatasetMapper):
         #     tranform = self.aug(image=np.array(image))
         #     image = tranform['image']
 
-        num_kpts = 0
 
         dataset_dict = ann_dict.to_dict()
 
         # image, transforms = T.apply_transform_gens([], image)
 
+        num_kpts = 0
         annots = []
         for item in dataset_dict["annotations"]:
             if 'keypoints' in item and num_kpts == 0:
@@ -214,6 +195,74 @@ class AugmentedLoader(DatasetMapper):
         dataset_dict["instances"] = utils.filter_empty_instances(
             instances, by_box=True, by_mask=False)
         return dataset_dict
+
+    def get_bg_img(self, image):
+        fw, fh = image.shape[:2]
+        bg_idx = np.random.randint(0, self.num_background_images)
+        if bg_idx in self.background_image_dict:
+            bg_img = self.background_image_dict[bg_idx]
+            printj.cyan("old background from hash table")
+        else:
+            bg_img = cv2.imread(self.background_images[bg_idx])
+            bw, bh = bg_img.shape[:2]
+            if fw < bw and fh < bh:
+                bg_img = bg_img[0:fw, 0:fh]
+            else:
+                bg_img = cv2.resize(bg_img, (fw, fh))
+            self.background_image_dict[bg_idx] = bg_img.copy()
+            # printj.yellow.bold_on_white("new background into hash table")
+        return bg_img
+
+    def augment_image_mask(self, file_name):
+        if self.bg_dirs is None:
+        # """
+            image = cv2.imread(file_name)
+            path_split = file_name.split("/")
+            path_split_mask = path_split[:-2] + \
+                [f"img_mask", path_split[-1]]
+            # printj.cyan(f'{path_split_mask=}')
+            mask_path = "/".join(path_split_mask)
+            # print(f"{mask_path=}")
+            # # mask = utils.read_image(mask_path, format="BGR")
+            # mask3 = cv2.imread(mask_path)
+            mask = cv2.imread(mask_path, 0)
+        # """
+        else:
+            # """ input rgba and replace bg
+            image = cv2.imread(file_name, flags=cv2.IMREAD_UNCHANGED)
+            assert image.shape[2] == 4
+            mask = image[:, :, 3]
+            image = image[:, :, :3]
+            mask3 = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+            bg_img = self.get_bg_img(image)
+            image = mask3//255*image + (1-mask3//255)*bg_img
+            # """
+        # m1 = cv2.hconcat([image, mask3])
+        # mask = mask3[:, :, 0]
+        # image = utils.read_image(dataset_dict["file_name"], format="BGR")
+        # img_h, img_w = image.shape[:2]
+        # num_pixels = img_w * img_h
+
+        polygon_length = 0
+        while polygon_length < 6:
+            tranform = self.aug(image=np.array(image), mask=mask)
+            image = tranform['image']
+            mask = tranform['mask']
+
+            ret, thresh = cv2.threshold(np.array(mask), 127, 255, 0)
+            contours = np.asarray(cv2.findContours(
+                thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[0])
+            x = [c[0][0] for c in flatten(contours)]
+            y = [c[0][1] for c in flatten(contours)]
+            xmin = min(x)
+            ymin = min(y)
+            xmax = max(x)
+            ymax = max(y)
+            bbox = BBox(xmin, ymin, xmax, ymax)
+
+            seg = [flatten(flatten(c)) for c in contours]
+            polygon_length = min([len(segi) for segi in seg])
+        return seg, bbox, image
 
     def visualize_aug(self, dataset_dict: dict):
         image = dataset_dict["image"].cpu().numpy(
